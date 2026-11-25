@@ -49,7 +49,7 @@ enum AssistantAPI {
     struct Reply: Decodable { let speech: String }
 
     static func ask(_ text: String) async -> String {
-        if let local = NativeHome.reply(text) { return local }
+        if let local = await NativeHome.reply(text) { return local }
         guard let token = TokenStore.read(), token.count >= 32 else {
             return "请先在 iPhone 的私人助手中保存语音令牌。"
         }
@@ -152,6 +152,8 @@ struct SettingsView: View {
     @State private var configured = false
     @State private var checking = false
     @State private var healthStatus = ""
+    @State private var musicStatus = ""
+    @AppStorage("homeWeatherCity") private var homeWeatherCity = ""
     @AppStorage("useHistory") private var useHistory = false
     @AppStorage("shareMemory") private var shareMemory = false
 
@@ -196,9 +198,12 @@ struct SettingsView: View {
                     if !healthStatus.isEmpty { Text(healthStatus) }
                     Text("仅读取步数、步行和跑步距离、活动能量。不会写入健康数据、上传云端或保存报告。语音报告需要本机身份验证，请留意旁人能听见。").font(.footnote)
                 }
-                Section("Siri 原生服务") {
-                    Text("直接说：嘿 Siri，今天的天气怎么样？现在几点？播放音乐。")
-                    Text("音乐播放、音量、闹钟、计时器、提醒事项由 Siri 执行；私人助手不拦截这些指令。")
+                Section("家庭服务") {
+                    TextField("默认天气城市（例如北京）", text: $homeWeatherCity)
+                    Button("授权 Apple Music") { Task { musicStatus = await HomeMusic.authorize() } }
+                    if !musicStatus.isEmpty { Text(musicStatus) }
+                    HStack { Text("选择音频输出"); Spacer(); HomeAudioRoutePicker().frame(width: 44, height: 44) }
+                    Text("进入私人助手后，可直接问天气、时间或点歌。音乐由系统播放器执行；HomePod 音频路由需真机验证。").font(.footnote)
                 }
                 Section("HomePod 测试") {
                     Text("先说：嘿 Siri，测试私人助手的连接。")

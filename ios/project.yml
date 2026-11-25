@@ -21,5 +21,6 @@ targets:
         CODE_SIGN_STYLE: Automatic
         INFOPLIST_KEY_NSHealthShareUsageDescription: 仅在设备上读取您授权的步数、步行距离及活动能量，用于今日健康语音报告，不上传云端。
         CODE_SIGN_ENTITLEMENTS: PrivateAssistant/PrivateAssistant.entitlements
-        MARKETING_VERSION: "0.2.0"
-        CURRENT_PROJECT_VERSION: "2"
+        INFOPLIST_KEY_NSAppleMusicUsageDescription: 用于您主动要求的音乐搜索和播放控制。
+        MARKETING_VERSION: "0.3.0"
+        CURRENT_PROJECT_VERSION: "3"

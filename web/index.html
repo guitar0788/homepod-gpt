@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HomePod GPT 管理</title>
+<h1>HomePod GPT 管理</h1>
+<label>管理员令牌 <input id="token" type="password" autocomplete="off"></label>
+<button id="load">连接 / 刷新</button>
+<p id="status" role="status"></p>
+<label>首选模型 <select id="provider"><option value="auto">自动</option></select></label>
+<button id="select">应用</button>
+<label>搜索记忆 <input id="query" type="search" maxlength="100"></label>
+<button id="search">搜索</button>
+<p><label>新记忆 <input id="fact" maxlength="1000"></label>
+<button id="add">保存</button></p>
+<ul id="memory"></ul>
+<button id="backup">下载备份</button>
+<label>恢复备份 <input type="file" id="file" accept=".json,application/json"></label>
+<button id="restore">恢复到空数据库</button>
+<button id="clear">清除对话</button>
+<script src="/dashboard.js" defer></script>
+</html>

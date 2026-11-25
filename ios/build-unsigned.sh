@@ -12,6 +12,13 @@ xcodebuild -project PrivateAssistant.xcodeproj \
 app="$PWD/.build/Build/Products/Release-iphoneos/PrivateAssistant.app"
 test -f "$app/Info.plist"
 test -f "$app/PrivateAssistant"
+# Xcode generated plists can omit unknown or new INFOPLIST_KEY settings.
+# The explicit source plist must survive the final build; fail rather than ship a broken permission.
+for key in NSAlarmKitUsageDescription NSHealthShareUsageDescription NSAppleMusicUsageDescription NSCalendarsFullAccessUsageDescription NSRemindersFullAccessUsageDescription; do
+  value="$(/usr/libexec/PlistBuddy -c "Print :$key" "$app/Info.plist")"
+  test -n "$value"
+  echo "Verified permission declaration: $key"
+done
 # Verify the binary is for an actual iPhone, not a simulator.
 xcrun vtool -show-build "$app/PrivateAssistant"
 xcrun lipo -verify_arch arm64 "$app/PrivateAssistant"

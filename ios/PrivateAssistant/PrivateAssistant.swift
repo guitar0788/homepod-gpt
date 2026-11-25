@@ -2,6 +2,7 @@ import SwiftUI
 import AppIntents
 import Security
 import Foundation
+import UniformTypeIdentifiers
 
 // Personal device only. Never put a server token in the source or a build setting.
 enum TokenStore {
@@ -160,6 +161,7 @@ struct PrivateAssistantShortcuts: AppShortcutsProvider {
         AppShortcut(intent: HealthReportIntent(),
                     phrases: ["用 \(.applicationName) 查看今日健康报告", "查看 \(.applicationName) 的健康报告"],
                     shortTitle: "今日健康", systemImageName: "heart.text.square")
+        AppShortcut(intent: ExtendedHealthIntent(), phrases: ["用 \(.applicationName) 查看详细健康报告"], shortTitle: "详细健康", systemImageName: "heart.text.square")
         AppShortcut(intent: HomePrivateTasksIntent(), phrases: ["用 \(.applicationName) 管理日程与提醒", "使用 \(.applicationName) 的家庭日程"], shortTitle: "日程与提醒", systemImageName: "calendar")
         AppShortcut(intent: WelcomeSceneIntent(), phrases: ["用 \(.applicationName) 查看回家简报", "查看 \(.applicationName) 的家庭简报"], shortTitle: "回家简报", systemImageName: "house")
         AppShortcut(intent: BedtimeSceneIntent(), phrases: ["用 \(.applicationName) 查看睡前简报"], shortTitle: "睡前简报", systemImageName: "moon")
@@ -191,6 +193,10 @@ struct SettingsView: View {
     @State private var sceneStatus = ""
     @State private var preview = ""
     @State private var previewBusy = false
+    @State private var selectedHealthGroup: ExtendedHealth.Group = .activity
+    @State private var extendedHealthStatus = ""
+    @State private var filePicker = false
+    @State private var fileStatus = ""
 
     var body: some View {
         NavigationStack {
@@ -199,7 +205,7 @@ struct SettingsView: View {
                     VStack(alignment: .leading, spacing: 8) {
                         Label("家庭 AI 助手", systemImage: "house.and.flag")
                             .font(.title2.bold())
-                        Text("Siri Plus 1.0 RC · 家庭语音增强").font(.subheadline).foregroundStyle(.secondary)
+                        Text("Siri Plus 1.0.1 · 家庭语音增强").font(.subheadline).foregroundStyle(.secondary)
                         Text("语音入口：询问私人助手").font(.callout)
                         Label(configured ? "语音令牌已保存" : "需要首次配置语音令牌", systemImage: configured ? "checkmark.shield" : "key")
                         Label(SmartHome.available ? "本机智能调度可用" : "使用基础调度与云端问答", systemImage: "cpu")
@@ -250,7 +256,18 @@ struct SettingsView: View {
                     Button("授权 Apple 健康") { Task { healthStatus = await LocalHealth.authorize() } }
                     Button("查看今日健康报告") { Task { healthStatus = await LocalHealth.report() } }
                     if !healthStatus.isEmpty { Text(healthStatus) }
+                    Picker("扩展健康分类", selection: $selectedHealthGroup) {
+                        ForEach(ExtendedHealth.Group.allCases) { group in Text(group.title).tag(group) }
+                    }
+                    Button("授权所选健康分类") { let group = selectedHealthGroup; Task { extendedHealthStatus = await ExtendedHealth.authorize(group) } }
+                    Button("读取所选健康分类") { let group = selectedHealthGroup; Task { extendedHealthStatus = await ExtendedHealth.report(group) } }
+                    if !extendedHealthStatus.isEmpty { Text(extendedHealthStatus) }
                     Text("仅读取步数、步行和跑步距离、活动能量、睡眠和心率记录。不会写入健康数据、上传云端或保存报告。语音报告需要本机身份验证，请留意旁人能听见。").font(.footnote)
+                }
+                Section("iCloud Drive 与文件") {
+                    Button("选择要授权读取的文件") { filePicker = true }
+                    if !fileStatus.isEmpty { Text(fileStatus) }
+                    Text("通过系统文件选择器读取你明确选中的文本文件，可从 iCloud Drive 选择。不会读取整个 iCloud 账户，不保存授权、不上传文件。").font(.footnote)
                 }
                 Section("家庭服务") {
                     Text(SmartHome.available ? "本机 Apple Intelligence 智能调度可用" : "本机 AI 暂不可用，保留原有服务和云端问答").font(.footnote)
@@ -282,6 +299,13 @@ struct SettingsView: View {
                     Text("最后说：嘿 Siri，询问私人助手。")
                     Text("测试版：是否能在 HomePod 上接收自由文本、锁屏执行及朗读，须使用实际设备验证。")
                         .font(.footnote)
+                }
+            }
+            .fileImporter(isPresented: $filePicker, allowedContentTypes: [.plainText, .json, .commaSeparatedText]) { result in
+                switch result {
+                case .success(let url):
+                    Task { fileStatus = await SelectedFile.preview(url) }
+                case .failure: fileStatus = "未能选择文件。"
                 }
             }
             .navigationTitle("私人助手")

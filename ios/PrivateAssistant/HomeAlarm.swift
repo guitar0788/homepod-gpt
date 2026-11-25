@@ -36,10 +36,19 @@ enum HomeAlarm {
 
     @MainActor static func authorize() async -> String {
         guard #available(iOS 26.0, *) else { return "系统闹钟需要 iOS 26 或更新版本。" }
+        guard let reason = Bundle.main.object(forInfoDictionaryKey:"NSAlarmKitUsageDescription") as? String, !reason.isEmpty else {
+            return "安装包缺少闹钟权限声明，请更新 App。"
+        }
+        let manager = AlarmManager.shared
+        if manager.authorizationState == .authorized { return "家庭助手闹钟权限已授权。" }
+        if manager.authorizationState == .denied { return "闹钟权限已被拒绝，请在系统设置中的本 App 权限页面重新开启（如系统提供）。" }
         do {
-            let state = try await AlarmManager.shared.requestAuthorization()
-            return state == .authorized ? "家庭助手闹钟权限已授权。" : "没有获得闹钟权限。"
-        } catch { return "闹钟权限请求失败。" }
+            let state = try await manager.requestAuthorization()
+            return state == .authorized ? "家庭助手闹钟权限已授权。" : "没有获得闹钟权限。请检查系统设置。"
+        } catch {
+            let e = error as NSError
+            return "闹钟权限请求失败。错误域：\(e.domain)，代码：\(e.code)。请提供该错误信息。"
+        }
     }
 
     @MainActor static func reply(_ text: String) async -> String? {

@@ -22,6 +22,13 @@ async function load() {
     "｜Agent " + (state.agent_version || "V1") +
     (state.deepseek_mode === "test" ? "｜DeepSeek 测试剩余：" + Math.max(0, 3 - state.deepseek_test_used) + "/3" : "");
   field("historySummary").textContent = state.history_summary || "尚未生成摘要";
+  field("semanticStatus").textContent = state.semantic_enabled ? "向量检索已配置" : "向量检索未启用（当前使用本地候选检索）";
+  field("profile").replaceChildren();
+  for (const item of state.profile || []) {
+    const li = document.createElement("li");
+    li.textContent = item.category + " / " + (item.subject || "未分类主题") + "：" + item.fact + (item.review ? "（同主题，需核对）" : "");
+    field("profile").append(li);
+  }
   const selector = field("provider");
   selector.replaceChildren(new Option("自动", "auto"));
   for (const name of Object.keys(state.models)) selector.add(new Option(name, name));

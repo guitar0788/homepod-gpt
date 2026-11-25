@@ -17,6 +17,7 @@ from storage import database, initialize
 from tools_api import lookup
 import agent
 import continuity
+import profile_memory
 
 pending = agent.Pending()
 
@@ -196,11 +197,14 @@ def ask(req: Ask, authorization: str = Header(default="")):
             if not req.share_memory:
                 pending.clear()
                 return speak("请先在 App 开启共享匹配记忆。")
-            fact = pending.take()
-            if not fact:
+            proposal = pending.take()
+            if not proposal:
                 return speak("没有待确认的记忆，或建议已过期。")
-            if not db.execute("SELECT id FROM memory WHERE fact=? LIMIT 1", (fact,)).fetchone():
-                db.execute("INSERT INTO memory(fact) VALUES (?)", (fact,))
+            fact, category, subject = proposal
+            row = db.execute("SELECT id FROM memory WHERE fact=? LIMIT 1", (fact,)).fetchone()
+            if not row:
+                row = db.execute("INSERT INTO memory(fact) VALUES (?) RETURNING id", (fact,)).fetchone()
+            profile_memory.store(db, row[0], category, subject)
             return speak("已保存：" + fact)
         if not req.share_memory:
             pending.clear()
@@ -232,10 +236,11 @@ def ask(req: Ask, authorization: str = Header(default="")):
         conversation = continuity.snapshot(db) if req.use_history else None
         history = [(question, answer) for _, question, answer in conversation.recent] if conversation else []
         facts = []
+        candidates = []
         if req.share_memory:
-            candidates = db.execute("SELECT fact FROM memory ORDER BY id DESC LIMIT 1000")
+            candidates = list(db.execute("SELECT id,fact FROM memory ORDER BY id DESC LIMIT 1000"))
             related_query = q + " " + " ".join(question[:300] for question, _ in history[:2])
-            facts = agent.select_memories(related_query, (row[0] for row in candidates))
+            facts = agent.select_memories(related_query, (row[1] for row in candidates))
     for prefix, action in (("天气", "weather"), ("新闻", "news"), ("搜索", "search")):
         if tool is None and q.startswith(prefix):
             tool, topic = action, q[len(prefix):].strip(" ：:")
@@ -253,8 +258,10 @@ def ask(req: Ask, authorization: str = Header(default="")):
             raise HTTPException(503, "查询服务暂时不可用") from None
     if preferred != "auto" and preferred not in models and req.provider != "auto":
         raise HTTPException(400, "指定模型不可用")
+    if req.share_memory and candidates:
+        facts = profile_memory.retrieve(database, reserve, q, candidates, facts)
     messages = [{"role": "system", "content": agent.INSTRUCTIONS +
-                 ("\n允许提出记忆建议，但不能直接保存。" if req.share_memory else "\n禁止提出记忆建议，memory必须为空。")}]
+                 ("\n允许提出记忆建议，但不能直接保存。若memory非空，附profile对象：category从preference,goal,routine,project,communication,background,other选择，subject为简短稳定的主题词，同一主题尽量一致；不要虚构。" if req.share_memory else "\n禁止提出记忆建议，memory必须为空。")}]
     if facts or (req.share_context and req.context):
         messages.append({"role": "user", "content": "参考数据：" + json.dumps(
             {"memory_candidates": facts, "context": req.context if req.share_context else ""},
@@ -321,9 +328,12 @@ def ask(req: Ask, authorization: str = Header(default="")):
             with database() as db:
                 exists = db.execute("SELECT id FROM memory WHERE fact=? LIMIT 1", (result.memory,)).fetchone()
             if not exists:
-                pending.offer(result.memory)
-                # Quote the exact proposed fact aloud so consent is informed.
-                answer = answer[:125] + "。是否记住：" + result.memory[:180] + "？你可以说确认保存或不要保存。"
+                with database() as db:
+                    similar = profile_memory.conflicts(db, result.subject, result.memory)
+                pending.offer(result.memory, result.category, result.subject)
+                # Show the complete candidate; related entries are preserved, not overwritten.
+                notice = "。已有同主题记忆，保存后可在后台核对。" if similar else ""
+                answer = answer[:65] + notice + "。是否记住：" + result.memory + "？请说确认保存或不要保存。"
         return speak(answer, name, model=models[name], history_saved=saved,
                      fallback=preferred not in ("auto", name) or name != names[0],
                      sources=sources, agent_attempts=attempts)
@@ -346,7 +356,8 @@ def state(q: str = "", authorization: str = Header(default="")):
         return {"memory": memories(db, q[:100]), "models": available(),
                 "preferred": get_setting(db, "provider"), "attempts": row[0] if row else 0,
                 "limit": daily_limit(), "configured_spend_policy": "free_only" if deepseek_mode() == "off" else "free_default_paid_explicit",
-                "agent_version": "2.1-beta", "deepseek_test_limit": 3,
+                "agent_version": "2.2-beta", "deepseek_test_limit": 3,
+                "profile": profile_memory.entries(db), "semantic_enabled": profile_memory.enabled(),
                 "history_summary": db.execute("SELECT summary FROM conversation_state WHERE id=1").fetchone()[0],
                 "deepseek_mode": deepseek_mode(), "deepseek_test_used": (db.execute("SELECT count FROM limits WHERE bucket=?", ("deepseek-test-lifetime-v1",)).fetchone() or (0,))[0]}
 
@@ -364,6 +375,7 @@ def edit(item: int, fact: Fact, authorization: str = Header(default="")):
         if not db.execute("UPDATE memory SET fact=? WHERE id=? RETURNING id",
                           (fact.fact.strip(), item)).fetchone():
             raise HTTPException(404, "记忆不存在")
+        profile_memory.invalidate(db, item)
     return {"ok": True}
 
 @app.delete("/admin/memory/{item}")
@@ -372,6 +384,7 @@ def delete(item: int, authorization: str = Header(default=""), x_confirm: str = 
     if x_confirm != f"delete-memory-{item}":
         raise HTTPException(409, "需要确认删除")
     with database() as db:
+        profile_memory.invalidate(db, item)
         if not db.execute("DELETE FROM memory WHERE id=? RETURNING id", (item,)).fetchone():
             raise HTTPException(404, "记忆不存在")
     return {"ok": True}

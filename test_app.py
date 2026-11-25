@@ -238,5 +238,40 @@ class AssistantTests(unittest.TestCase):
         self.assertEqual(agent.plan('{"answer":"好","summary":"无来源"}', "你好").summary, "")
         self.assertEqual(agent.plan('{"answer":"好","summary":"有来源"}', "你好", allow_summary=True).summary, "有来源")
 
+    def test_profile_is_confirmed_and_edit_invalidates(self):
+        import json
+        raw = json.dumps({"answer":"好的","memory":"我喜欢喝茶","profile":{"category":"preference","subject":"饮品"}},ensure_ascii=False)
+        with patch("providers.complete", return_value=raw):
+            self.ask("我喜欢喝茶",share_memory=True)
+            self.assertEqual(self.client.get("/admin/state",headers=self.admin).json()["profile"],[])
+            self.ask("确认保存",share_memory=True)
+        state = self.client.get("/admin/state",headers=self.admin).json()
+        self.assertEqual(state["profile"][0]["category"],"preference")
+        self.assertFalse(state["semantic_enabled"])
+        identifier = state["profile"][0]["id"]
+        self.client.put("/admin/memory/"+str(identifier),headers=self.admin,json={"fact":"我喜欢咖啡"})
+        self.assertEqual(self.client.get("/admin/state",headers=self.admin).json()["profile"],[])
+
+    def test_vector_gate_and_real_cosine_ranking_mock(self):
+        import profile_memory as p
+        from storage import database
+        from app import reserve
+        with database() as db:
+            a = db.execute("INSERT INTO memory(fact) VALUES (?) RETURNING id",("喜欢跑步",)).fetchone()[0]
+            b = db.execute("INSERT INTO memory(fact) VALUES (?) RETURNING id",("喜欢阅读",)).fetchone()[0]
+        rows = [(a,"喜欢跑步"),(b,"喜欢阅读")]
+        one = [1.0]+[0.0]*(p.DIM-1)
+        two = [0.0,1.0]+[0.0]*(p.DIM-2)
+        with patch("profile_memory.embed",return_value=[two,one,two]) as mock:
+            self.assertEqual(p.retrieve(database,reserve,"书籍",rows,["喜欢跑步"]),["喜欢跑步"])
+            mock.assert_not_called()
+            with patch.dict(os.environ,{"GEMINI_EMBEDDINGS_ENABLED":"1","GEMINI_EMBEDDINGS_VERIFIED_FREE":"1","GEMINI_EMBEDDINGS_PRIVACY_ACCEPTED":"1","GEMINI_KEY":"mock"}):
+                self.assertEqual(p.retrieve(database,reserve,"书籍",rows,["喜欢跑步"])[0],"喜欢阅读")
+                self.assertEqual(mock.call_count,1)
+                self.assertEqual(p.retrieve(database,reserve,"我的密码",rows,[]),[])
+                self.assertEqual(mock.call_count,1)
+        with database() as db:
+            self.assertEqual(db.execute("SELECT count(*) FROM memory_vectors").fetchone()[0],2)
+
 if __name__ == "__main__":
     unittest.main()

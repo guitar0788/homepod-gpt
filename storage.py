@@ -7,6 +7,8 @@ SCHEMA = (
     "CREATE TABLE IF NOT EXISTS memory (id {identity}, fact TEXT NOT NULL)",
     "CREATE TABLE IF NOT EXISTS history (id {identity}, question TEXT NOT NULL, answer TEXT NOT NULL)",
     "CREATE TABLE IF NOT EXISTS settings (name TEXT PRIMARY KEY, value TEXT NOT NULL)",
+    "CREATE TABLE IF NOT EXISTS memory_profile (memory_id BIGINT PRIMARY KEY REFERENCES memory(id) ON DELETE CASCADE, category TEXT NOT NULL, subject TEXT NOT NULL)",
+    "CREATE TABLE IF NOT EXISTS memory_vectors (memory_id BIGINT PRIMARY KEY REFERENCES memory(id) ON DELETE CASCADE, model TEXT NOT NULL, fingerprint TEXT NOT NULL, vector TEXT NOT NULL)",
     "CREATE TABLE IF NOT EXISTS conversation_state (id INTEGER PRIMARY KEY, revision BIGINT NOT NULL, through_id BIGINT NOT NULL, summary TEXT NOT NULL)",
     """CREATE TABLE IF NOT EXISTS limits (
         bucket TEXT PRIMARY KEY, count INTEGER NOT NULL

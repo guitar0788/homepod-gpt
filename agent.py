@@ -3,6 +3,7 @@ import json
 import re
 import threading
 import time
+import profile_memory
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 
@@ -31,6 +32,8 @@ class Plan:
     research: list = field(default_factory=list)
     memory: str = ""
     summary: str = ""
+    category: str = "other"
+    subject: str = ""
 
 def plan(raw, question, allow_memory=False, allow_summary=False):
     raw = raw.strip()
@@ -70,7 +73,8 @@ def plan(raw, question, allow_memory=False, allow_summary=False):
         memory = memory.strip()
     summary = data.get("summary")
     summary = summary.strip() if allow_summary and isinstance(summary, str) and 1 <= len(summary.strip()) <= 500 else ""
-    return Plan(answer or "我暂时无法给出完整回答。", research, memory, summary)
+    category, subject = profile_memory.metadata(data.get("profile")) if memory else ("other", "")
+    return Plan(answer or "我暂时无法给出完整回答。", research, memory, summary, category, subject)
 
 def research(plan, lookup):
     """At most two fixed-endpoint queries in parallel; no arbitrary URLs or writes."""
@@ -131,9 +135,9 @@ class Pending:
         self.lock = threading.Lock()
         self.fact = None
         self.expires = 0
-    def offer(self, fact):
+    def offer(self, fact, category="other", subject=""):
         with self.lock:
-            self.fact = fact
+            self.fact = (fact, category, subject)
             self.expires = time.monotonic() + self.ttl
     def take(self):
         with self.lock:

@@ -238,5 +238,28 @@ class AssistantTests(unittest.TestCase):
         self.assertEqual(agent.plan('{"answer":"好","summary":"无来源"}', "你好").summary, "")
         self.assertEqual(agent.plan('{"answer":"好","summary":"有来源"}', "你好", allow_summary=True).summary, "有来源")
 
+    def test_voice_repeat_is_free_and_history_opt_in(self):
+        with patch("providers.complete", return_value="茶叶有很多种。") as call:
+            self.ask("介绍茶叶", use_history=True)
+            self.assertIn("没有开启", self.ask("刚才没听清").json()["speech"])
+            self.assertEqual(self.ask("刚才没听清", use_history=True).json()["speech"], "茶叶有很多种。")
+            self.assertEqual(self.ask("先聊到这里").json()["provider"], "local")
+            self.assertEqual(call.call_count, 1)
+
+    def test_voice_render_does_not_read_links(self):
+        import voice
+        self.assertEqual(voice.render("参考[资料](https://example.com)。"), "参考资料。")
+        speech = voice.render("这是一句完整的话。" * 100)
+        self.assertLessEqual(len(speech), 350)
+        self.assertNotIn("文字结果", speech)
+        self.assertIsNone(voice.timeout_for(20))
+
+    def test_voice_prompt_and_timeout(self):
+        with patch("providers.complete", return_value="好。") as call:
+            self.ask("你好")
+            self.assertIn("家庭音箱", call.call_args.args[2][0]["content"])
+            self.assertGreater(call.call_args.kwargs["timeout"], 0)
+            self.assertLessEqual(call.call_args.kwargs["timeout"], 12)
+
 if __name__ == "__main__":
     unittest.main()

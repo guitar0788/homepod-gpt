@@ -103,9 +103,10 @@ def research(plan, lookup):
         groups = list(pool.map(one, plan.research))
     return [row for group in groups for row in group][:6]
 
-def synthesis_messages(question, evidence):
+def synthesis_messages(question, evidence, history=()):
     return [{"role": "system", "content": SYNTHESIS},
-            {"role": "user", "content": json.dumps({"question": question, "evidence": evidence}, ensure_ascii=False)}]
+            {"role": "user", "content": json.dumps({"question": question, "evidence": evidence,
+                "recent_context": [{"question": q[:500], "answer": a[:350]} for q,a in history[:2]]}, ensure_ascii=False)}]
 
 def select_memories(question, rows, limit=12):
     """Local candidate shortlist; the language model interprets semantic relevance."""

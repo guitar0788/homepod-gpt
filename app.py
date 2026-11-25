@@ -17,6 +17,7 @@ from storage import database, initialize
 from tools_api import lookup
 import agent
 import continuity
+import voice
 
 pending = agent.Pending()
 
@@ -102,10 +103,7 @@ def day_bucket():
     return "model-day:" + time.strftime("%Y-%m-%d", time.gmtime())
 
 def speak(answer, provider="local", **extra):
-    spoken = re.sub(r"https?://\S+", "", answer)
-    spoken = re.sub(r"[`*_#]", "", spoken).strip()
-    if len(spoken) > 350:
-        spoken = spoken[:350] + "。完整内容可在文字结果查看。"
+    spoken = voice.render(answer)
     return {"answer": answer, "speech": spoken, "provider": provider, **extra}
 
 def get_setting(db, name):
@@ -204,6 +202,15 @@ def ask(req: Ask, authorization: str = Header(default="")):
             return speak("已保存：" + fact)
         if not req.share_memory:
             pending.clear()
+        action = voice.local_action(q) if tool is None else None
+        if action == "repeat":
+            if not req.use_history:
+                return speak("没有开启对话历史，我无法读取刚才的回答。")
+            previous = db.execute("SELECT answer FROM history ORDER BY id DESC LIMIT 1").fetchone()
+            return speak(previous[0] if previous else "还没有可以重复的回答。")
+        if action == "end":
+            pending.clear()
+            return speak("好，我们下次再聊。")
         preferred = get_setting(db, "provider") if req.provider == "auto" else req.provider.lower()
         if q == "查看模型":
             return speak("当前：" + preferred + "。免费可用：" + ("、".join(models) or "无") + ("。DeepSeek 已启用，仅显式调用。" if deepseek_mode() != "off" else ""))
@@ -253,7 +260,7 @@ def ask(req: Ask, authorization: str = Header(default="")):
             raise HTTPException(503, "查询服务暂时不可用") from None
     if preferred != "auto" and preferred not in models and req.provider != "auto":
         raise HTTPException(400, "指定模型不可用")
-    messages = [{"role": "system", "content": agent.INSTRUCTIONS +
+    messages = [{"role": "system", "content": agent.INSTRUCTIONS + "\n" + voice.STYLE +
                  ("\n允许提出记忆建议，但不能直接保存。" if req.share_memory else "\n禁止提出记忆建议，memory必须为空。")}]
     if facts or (req.share_context and req.context):
         messages.append({"role": "user", "content": "参考数据：" + json.dumps(
@@ -278,14 +285,17 @@ def ask(req: Ask, authorization: str = Header(default="")):
 
     def free_call(name, prompt):
         nonlocal attempts
+        timeout = voice.timeout_for(time.monotonic() - started)
+        if timeout is None:
+            raise httpx.ReadTimeout("Voice response budget exhausted")
         with database() as db:
             db.execute("DELETE FROM limits WHERE bucket LIKE 'model-day:%' AND bucket < ?", (day_bucket(),))
             if not reserve(db, day_bucket(), daily_limit()):
                 raise HTTPException(429, "免费请求预算已用完，请在 UTC 次日重试")
         attempts += 1
         if conversation and conversation.older and prompt is messages:
-            return providers.complete(name, models[name], prompt, max_tokens=900)
-        return providers.complete(name, models[name], prompt)
+            return providers.complete(name, models[name], prompt, max_tokens=900, timeout=timeout)
+        return providers.complete(name, models[name], prompt, timeout=timeout)
 
     for name in names[:2]:
         if attempts >= 2:
@@ -299,11 +309,11 @@ def ask(req: Ask, authorization: str = Header(default="")):
         sources = []
         if result.research:
             # Avoid an additional upstream round if first call was already slow.
-            if attempts < 2 and time.monotonic() - started < 8:
+            if attempts < 2 and voice.timeout_for(time.monotonic() - started - 0 + 5) is not None:
                 sources = agent.research(result, lookup)
-                if sources and time.monotonic() - started < 18:
+                if sources and voice.timeout_for(time.monotonic() - started) is not None:
                     try:
-                        answer = free_call(name, agent.synthesis_messages(q, sources))
+                        answer = free_call(name, agent.synthesis_messages(q, sources, history))
                     except (HTTPException, httpx.HTTPError, ValueError, KeyError, IndexError, TypeError):
                         answer = "已找到相关资料，但暂时无法综合核实。"
                 else:
@@ -323,7 +333,7 @@ def ask(req: Ask, authorization: str = Header(default="")):
             if not exists:
                 pending.offer(result.memory)
                 # Quote the exact proposed fact aloud so consent is informed.
-                answer = answer[:125] + "。是否记住：" + result.memory[:180] + "？你可以说确认保存或不要保存。"
+                answer = answer[:65] + "。是否记住：" + result.memory + "？请说确认保存或不要保存。"
         return speak(answer, name, model=models[name], history_saved=saved,
                      fallback=preferred not in ("auto", name) or name != names[0],
                      sources=sources, agent_attempts=attempts)
@@ -346,7 +356,7 @@ def state(q: str = "", authorization: str = Header(default="")):
         return {"memory": memories(db, q[:100]), "models": available(),
                 "preferred": get_setting(db, "provider"), "attempts": row[0] if row else 0,
                 "limit": daily_limit(), "configured_spend_policy": "free_only" if deepseek_mode() == "off" else "free_default_paid_explicit",
-                "agent_version": "2.1-beta", "deepseek_test_limit": 3,
+                "agent_version": "home-voice-1.0-beta", "deepseek_test_limit": 3,
                 "history_summary": db.execute("SELECT summary FROM conversation_state WHERE id=1").fetchone()[0],
                 "deepseek_mode": deepseek_mode(), "deepseek_test_used": (db.execute("SELECT count FROM limits WHERE bucket=?", ("deepseek-test-lifetime-v1",)).fetchone() or (0,))[0]}
 

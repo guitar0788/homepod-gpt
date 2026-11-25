@@ -13,6 +13,7 @@ enum NativeHome {
         }
         if let result = await HomeWeather.reply(text) { return result }
         if let result = await HomeMusic.reply(text) { return result }
+        if let result = await HomeAlarm.reply(text) { return result }
         if let result = await HomeTasks.timer(text) { return result }
         if HomeTasks.isPrivate(text) { return "请使用本助手的家庭日程与提醒功能进行本机身份验证，日程及提醒内容不会发送云端。" }
         if text.contains("闹钟") || text.contains("计时") { return "暂不支持此闹钟或计时表达。可以说设置五分钟计时器；该功能使用手机通知，不是系统闹钟。" }

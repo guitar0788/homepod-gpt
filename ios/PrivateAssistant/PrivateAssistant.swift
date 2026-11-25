@@ -198,7 +198,7 @@ struct SettingsView: View {
                     Button("授权 Apple 健康") { Task { healthStatus = await LocalHealth.authorize() } }
                     Button("查看今日健康报告") { Task { healthStatus = await LocalHealth.report() } }
                     if !healthStatus.isEmpty { Text(healthStatus) }
-                    Text("仅读取步数、步行和跑步距离、活动能量。不会写入健康数据、上传云端或保存报告。语音报告需要本机身份验证，请留意旁人能听见。").font(.footnote)
+                    Text("仅读取步数、步行和跑步距离、活动能量、睡眠和心率记录。不会写入健康数据、上传云端或保存报告。语音报告需要本机身份验证，请留意旁人能听见。").font(.footnote)
                 }
                 Section("家庭服务") {
                     TextField("默认天气城市（例如北京）", text: $homeWeatherCity)
@@ -211,6 +211,7 @@ struct SettingsView: View {
                     Button("授权日历读取") { Task { taskStatus = await HomeTasks.authorizeCalendar() } }
                     Button("授权提醒事项") { Task { taskStatus = await HomeTasks.authorizeReminders() } }
                     Button("授权手机计时通知") { Task { taskStatus = await HomeTasks.authorizeNotifications() } }
+                    Button("授权系统闹钟") { Task { taskStatus = await HomeAlarm.authorize() } }
                     if !taskStatus.isEmpty { Text(taskStatus) }
                     Text("日程和提醒使用独立的本机身份验证语音入口；不上传云端。计时提醒由 iPhone 通知发出，不会保证 HomePod 响铃。").font(.footnote)
                 }

@@ -1,0 +1,36 @@
+name: Build unsigned iPhone IPA
+on:
+  push:
+    branches: [ios-app-intents-prototype]
+    paths:
+      - 'ios/**'
+      - '.github/workflows/build-ios.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ios-prototype-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  build:
+    if: github.event.repository.private == false
+    runs-on: xcode-27
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Check Xcode and install XcodeGen
+        run: |
+          xcodebuild -version
+          xcrun --sdk iphoneos --show-sdk-version
+          command -v xcodegen || brew install xcodegen
+      - name: Build unsigned iPhone IPA
+        run: bash ios/build-unsigned.sh
+      - name: Upload unsigned artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: PrivateAssistant-unsigned
+          path: ios/dist/
+          if-no-files-found: error
+          retention-days: 1

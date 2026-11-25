@@ -18,7 +18,7 @@ class Store:
         self.local = local
 
     def execute(self, sql, args=()):
-        return self.connection.execute(sql if self.local else sql.replace("?", "%s"), args)
+        return self.connection.execute(sql if self.local else sql.replace("%", "%%").replace("?", "%s"), args)
 
 @contextmanager
 def database():

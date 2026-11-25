@@ -9,8 +9,9 @@ enum NativeHome {
         return formatter.string(from:Date())
     }
     static func reply(_ input: String) async -> String? {
-        let text = input.trimmingCharacters(in: .whitespacesAndNewlines)
-            .trimmingCharacters(in: CharacterSet(charactersIn: "。？！?！!"))
+        let text = VoicePolicy.normalize(input)
+        if VoicePolicy.blocksAction(text) { return "这句话包含否定、条件或询问，没有执行设备操作。" }
+        if HomeSceneKind.parse(text) == nil, let route = VoicePolicy.privateDestination(text) { return route }
         if ["几点了", "现在几点", "现在几点了", "现在时间", "现在是什么时间", "今天几号", "今天星期几", "今天是几号", "今天是什么日期"].contains(text) {
             let formatter = DateFormatter()
             formatter.locale = Locale(identifier: "zh_CN")
@@ -18,8 +19,15 @@ enum NativeHome {
             formatter.dateFormat = text.hasPrefix("今天") ? "yyyy年M月d日 EEEE" : "HH点mm分"
             return formatter.string(from: Date())
         }
-        if case .plan(let parts) = HomeCompoundRules.parse(text), parts.contains(where:{$0.action}) {
-            return "组合执行需要通过语音询问入口确认，本次未执行。"
+        switch HomeCompoundRules.parse(text) {
+        case .plan(let parts):
+            if parts.contains(where:{$0.action}) { return "组合执行需要通过语音询问入口确认，本次未执行。" }
+            if HomeCompound.valid(parts) { return await HomeCompound.execute(parts) }
+            return "无法确认组合查询参数。"
+        case .unsupported:
+            if ReadRouting.compound(text), let result = await SmartHome.reply(text) { return result }
+            return "组合请求暂不支持，本次未执行设备操作。"
+        case .none: break
         }
         if let scene = HomeSceneKind.parse(text) { return await HomeScenes.report(scene,privateAccess:false) }
         if ReadRouting.compound(text) {

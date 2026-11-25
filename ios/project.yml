@@ -25,5 +25,5 @@ targets:
         INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription: 用于您主动要求查看的本机日历日程，不上传云端。
         INFOPLIST_KEY_NSRemindersFullAccessUsageDescription: 用于您主动要求创建的本机提醒事项，不上传云端。
         INFOPLIST_KEY_NSAlarmKitUsageDescription: 用于您主动要求设置的家庭助手手机闹钟。
-        MARKETING_VERSION: "0.9.0"
-        CURRENT_PROJECT_VERSION: "9"
+        MARKETING_VERSION: "1.0.0"
+        CURRENT_PROJECT_VERSION: "10"

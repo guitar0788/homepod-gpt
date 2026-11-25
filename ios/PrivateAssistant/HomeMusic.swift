@@ -31,6 +31,7 @@ enum HomeMusic {
             }
         }
         let generic = ["听音乐","放音乐","播放音乐","播放歌曲","放首歌"]
+        if !VoicePolicy.musicQueryAllowed(text) { return nil }
         guard pause.contains(text) || next.contains(text) || previous.contains(text) ||
               resume.contains(text) || generic.contains(text) || term != nil || scene != nil else { return nil }
         guard MusicAuthorization.currentStatus == .authorized else {

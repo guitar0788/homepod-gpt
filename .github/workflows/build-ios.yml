@@ -41,8 +41,14 @@ jobs:
         run: |
           temp="$(mktemp -d)"
           cp ios/tests/CompoundRulesTests.swift "$temp/main.swift"
-          swiftc ios/PrivateAssistant/ReadRouting.swift ios/PrivateAssistant/HomeCompoundRules.swift "$temp/main.swift" -o "$temp/test-compound"
+          swiftc ios/PrivateAssistant/ReadRouting.swift ios/PrivateAssistant/VoicePolicy.swift ios/PrivateAssistant/HomeCompoundRules.swift "$temp/main.swift" -o "$temp/test-compound"
           "$temp/test-compound"
+      - name: Test release routing and privacy boundaries
+        run: |
+          temp="$(mktemp -d)"
+          cp ios/tests/VoicePolicyTests.swift "$temp/main.swift"
+          swiftc ios/PrivateAssistant/ReadRouting.swift ios/PrivateAssistant/VoicePolicy.swift ios/PrivateAssistant/HomeCompoundRules.swift "$temp/main.swift" -o "$temp/test-release"
+          "$temp/test-release"
       - name: Build unsigned iPhone IPA
         run: bash ios/build-unsigned.sh
       - name: Upload unsigned artifact
@@ -51,4 +57,4 @@ jobs:
           name: PrivateAssistant-unsigned
           path: ios/dist/
           if-no-files-found: error
-          retention-days: 1
+          retention-days: 7

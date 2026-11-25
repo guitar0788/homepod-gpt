@@ -1,0 +1,17 @@
+import Foundation
+func check(_ ok: @autoclosure () -> Bool,_ label:String) { if !ok() { fatalError(label) } }
+check(VoicePolicy.normalize("  现在几点？ ") == "现在几点","normalize")
+check(VoicePolicy.blocksAction("先别播放音乐"),"negation")
+check(VoicePolicy.blocksAction("如果下雨就设置闹钟"),"condition")
+check(VoicePolicy.blocksAction("播放音乐怎么实现"),"discussion")
+check(!VoicePolicy.blocksAction("明天早上七点叫我起床"),"alarm")
+check(!VoicePolicy.blocksAction("播放周杰伦的歌"),"song")
+check(!VoicePolicy.musicQueryAllowed("我想听你解释这个问题"),"not music")
+check(!VoicePolicy.musicQueryAllowed("我想听一个故事"),"story")
+check(VoicePolicy.musicQueryAllowed("播放晴天"),"song title")
+check(VoicePolicy.privateDestination("我的心率怎么样") != nil,"private health")
+check(VoicePolicy.privateDestination("明天的日程") != nil,"private calendar")
+check(VoicePolicy.privateDestination("十分钟后提醒我喝水") != nil,"private write")
+check(VoicePolicy.privateDestination("心率是什么") == nil,"general health")
+check(HomeCompoundRules.parse("如果下雨，然后明天早上七点叫我起床") == .unsupported,"conditional compound")
+print("14 release routing checks passed")

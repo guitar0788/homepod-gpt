@@ -49,12 +49,12 @@ enum AssistantAPI {
     struct Reply: Decodable { let speech: String }
 
     static func ask(_ text: String) async -> String {
-        if let local = await NativeHome.reply(text) { return local }
+        let question = VoicePolicy.normalize(text)
+        guard !question.isEmpty, question.count <= 3000 else { return "请提供有效的问题。" }
+        if let local = await NativeHome.reply(question) { return local }
         guard let token = TokenStore.read(), token.count >= 32 else {
             return "请先在 iPhone 的私人助手中保存语音令牌。"
         }
-        let question = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !question.isEmpty, question.count <= 3000 else { return "请提供有效的问题。" }
         var request = URLRequest(url: URL(string: "https://homepod-gpt.onrender.com/ask")!)
         request.httpMethod = "POST"
         request.timeoutInterval = 65
@@ -117,6 +117,12 @@ struct AskIntent: AppIntent {
     var question: String
 
     func perform() async throws -> some IntentResult & ProvidesDialog {
+        if VoicePolicy.blocksAction(question) {
+            return .result(dialog:"这句话包含否定、条件或询问，没有执行设备操作。若要操作，请直接说明。")
+        }
+        if HomeSceneKind.parse(question) == nil, let route = VoicePolicy.privateDestination(question) {
+            return .result(dialog:"\(route)")
+        }
         switch HomeCompoundRules.parse(question) {
         case .none:
             let speech = await AssistantAPI.ask(question)
@@ -183,10 +189,31 @@ struct SettingsView: View {
     @AppStorage("sceneReminders") private var sceneReminders = false
     @AppStorage("sceneHealth") private var sceneHealth = false
     @State private var sceneStatus = ""
+    @State private var preview = ""
+    @State private var previewBusy = false
 
     var body: some View {
         NavigationStack {
             Form {
+                Section {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Label("家庭 AI 助手", systemImage: "house.and.flag")
+                            .font(.title2.bold())
+                        Text("Siri Plus 1.0 RC · 家庭语音增强").font(.subheadline).foregroundStyle(.secondary)
+                        Text("语音入口：询问私人助手").font(.callout)
+                        Label(configured ? "语音令牌已保存" : "需要首次配置语音令牌", systemImage: configured ? "checkmark.shield" : "key")
+                        Label(SmartHome.available ? "本机智能调度可用" : "使用基础调度与云端问答", systemImage: "cpu")
+                    }.padding(.vertical, 6)
+                    Button("预览当前时间与天气") {
+                        previewBusy = true
+                        Task {
+                            let weather = await HomeWeather.reply("今天天气") ?? "天气暂不可用。"
+                            preview = "现在是" + NativeHome.localTime() + "。" + weather
+                            previewBusy = false
+                        }
+                    }.disabled(previewBusy)
+                    if !preview.isEmpty { Text(preview).font(.callout) }
+                } header: { Text("概览") }
                 Section("首次连接") {
                     Text(configured ? "已保存语音令牌" : "尚未保存语音令牌")
                     SecureField("粘贴 ASSISTANT_TOKEN", text: $token)

@@ -45,7 +45,7 @@ enum HomeCompoundRules {
         return nil
     }
     static func parse(_ input: String) -> Result {
-        let text = input.trimmingCharacters(in:.whitespacesAndNewlines)
+        let text = VoicePolicy.normalize(input)
         let separator = #"\s*(?:[，,；;]\s*(?:然后|顺便|并且|同时|以及|再帮我|再)?|然后|顺便|并且|同时|以及)\s*"#
         guard let regex = try? NSRegularExpression(pattern:separator) else { return .none }
         let marked = regex.stringByReplacingMatches(in:text,range:NSRange(text.startIndex...,in:text),withTemplate:"\u{001F}")
@@ -56,6 +56,8 @@ enum HomeCompoundRules {
         let hints = ["闹钟","叫我起床","叫醒我","计时","播放","切歌","下一首","音乐","放点","放些","来点","来些","日程","日历","提醒"]
         let hasHint = ReadRouting.weatherCue(text) || ReadRouting.clockCue(text) || hints.contains(where:{text.contains($0)})
         guard hasHint else { return .none }
+        // A condition or negation can apply across clause boundaries.
+        guard !VoicePolicy.blocksAction(text) else { return .unsupported }
         guard clauses.count <= 3, text.count <= 260, parts.count == clauses.count,
               parts.filter({$0.action}).count <= 1, Set(parts.map{$0.kind}).count == parts.count else {
             return .unsupported

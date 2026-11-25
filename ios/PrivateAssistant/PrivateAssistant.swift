@@ -49,6 +49,7 @@ enum AssistantAPI {
     struct Reply: Decodable { let speech: String }
 
     static func ask(_ text: String) async -> String {
+        if let local = NativeHome.reply(text) { return local }
         guard let token = TokenStore.read(), token.count >= 32 else {
             return "请先在 iPhone 的私人助手中保存语音令牌。"
         }
@@ -132,6 +133,9 @@ struct PrivateAssistantShortcuts: AppShortcutsProvider {
         AppShortcut(intent: AskIntent(),
                     phrases: ["询问 \(.applicationName)", "用 \(.applicationName) 提问"],
                     shortTitle: "询问", systemImageName: "bubble.left")
+        AppShortcut(intent: HealthReportIntent(),
+                    phrases: ["用 \(.applicationName) 查看今日健康报告", "查看 \(.applicationName) 的健康报告"],
+                    shortTitle: "今日健康", systemImageName: "heart.text.square")
     }
 }
 
@@ -147,6 +151,7 @@ struct SettingsView: View {
     @State private var status = ""
     @State private var configured = false
     @State private var checking = false
+    @State private var healthStatus = ""
     @AppStorage("useHistory") private var useHistory = false
     @AppStorage("shareMemory") private var shareMemory = false
 
@@ -184,6 +189,16 @@ struct SettingsView: View {
                     Toggle("共享匹配记忆", isOn: $shareMemory)
                     Text("默认关闭。开启后相关内容可能发送给模型。HomePod 可在手机锁屏时尝试运行语音操作，请勿在他人可听见时读取敏感记忆。")
                         .font(.footnote)
+                }
+                Section("Apple 健康（本机只读）") {
+                    Button("授权 Apple 健康") { Task { healthStatus = await LocalHealth.authorize() } }
+                    Button("查看今日健康报告") { Task { healthStatus = await LocalHealth.report() } }
+                    if !healthStatus.isEmpty { Text(healthStatus) }
+                    Text("仅读取步数、步行和跑步距离、活动能量。不会写入健康数据、上传云端或保存报告。语音报告需要本机身份验证，请留意旁人能听见。").font(.footnote)
+                }
+                Section("Siri 原生服务") {
+                    Text("直接说：嘿 Siri，今天的天气怎么样？现在几点？播放音乐。")
+                    Text("音乐播放、音量、闹钟、计时器、提醒事项由 Siri 执行；私人助手不拦截这些指令。")
                 }
                 Section("HomePod 测试") {
                     Text("先说：嘿 Siri，测试私人助手的连接。")

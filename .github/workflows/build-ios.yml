@@ -1,7 +1,7 @@
 name: Build unsigned iPhone IPA
 on:
   push:
-    branches: [ios-app-intents-prototype]
+    branches: [ios-app-intents-prototype, ios-health-home-voice]
     paths:
       - 'ios/**'
       - '.github/workflows/build-ios.yml'

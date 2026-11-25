@@ -19,5 +19,7 @@ targets:
         SWIFT_VERSION: "5.0"
         TARGETED_DEVICE_FAMILY: "1"
         CODE_SIGN_STYLE: Automatic
-        MARKETING_VERSION: "0.1.0"
-        CURRENT_PROJECT_VERSION: "1"
+        INFOPLIST_KEY_NSHealthShareUsageDescription: 仅在设备上读取您授权的步数、步行距离及活动能量，用于今日健康语音报告，不上传云端。
+        CODE_SIGN_ENTITLEMENTS: PrivateAssistant/PrivateAssistant.entitlements
+        MARKETING_VERSION: "0.2.0"
+        CURRENT_PROJECT_VERSION: "2"

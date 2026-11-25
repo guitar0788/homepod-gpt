@@ -20,3 +20,7 @@ Apple 官方参考：
 - https://developer.apple.com/videos/play/wwdc2024/10210/
 - https://developer.apple.com/documentation/appintents/acceleratingappinteractionswithappintents
 - https://developer.apple.com/help/account/basics/about-your-developer-account/
+
+## Health + Home Voice 0.2 实验版
+
+仅本地只读 HealthKit，读取当天步数、步行和跑步距离、活动能量。App 中主动点授权，读取权限以真实查询为准；单独的健康报告 App Intent 要求本机身份验证。健康数据不写入云端、模型或历史。签名需要健康权限 entitlement，免费个人签名是否能保留该能力尚未验证，不购买会员、不替换当前可用 IPA。当前时间/日期在手机本地回答；天气、音乐、音量、闹钟和提醒交给原生 Siri。无法程序化调用任意 Siri 指令或保证 HomePod 代为播放，App 内仅提供正确引导，不宣称完成播放。测试先编译，后验签名、健康权限、锁屏隐私及真实朗读。睡眠心率尚未实现。

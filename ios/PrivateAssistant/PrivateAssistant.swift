@@ -203,7 +203,7 @@ struct SettingsView: View {
                     Button("授权 Apple Music") { Task { musicStatus = await HomeMusic.authorize() } }
                     if !musicStatus.isEmpty { Text(musicStatus) }
                     HStack { Text("选择音频输出"); Spacer(); HomeAudioRoutePicker().frame(width: 44, height: 44) }
-                    Text("进入私人助手后，可直接问天气、时间或点歌。音乐由系统播放器执行；HomePod 音频路由需真机验证。").font(.footnote)
+                    Text("Siri 原有功能不受影响。进入增强助手后，可以问明天适不适合出门、要不要带伞，或要求睡前音乐。音乐由系统播放器执行；HomePod 音频路由需真机验证。").font(.footnote)
                 }
                 Section("HomePod 测试") {
                     Text("先说：嘿 Siri，测试私人助手的连接。")

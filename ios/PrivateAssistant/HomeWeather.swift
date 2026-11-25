@@ -56,14 +56,63 @@ enum HomeWeather {
         }
     }
 
-    static func reply(_ text: String) async -> String? {
-        // Explicit everyday weather requests only; broader discussion remains with the AI.
-        let pattern = #"^(?:请问|告诉我|帮我查一下|查一下|查查|查看)?\s*(.*?)(今天|明天|后天|现在|当前|今日)?(?:的)?(?:天气(?:预报|怎么样|如何)?|气温(?:多少|怎么样)?|多少度|会下雨吗|下雨吗|冷不冷|热不热)$"#
+    struct Intent {
+        let city: String
+        let day: String
+        let advice: Bool
+    }
+
+    static func parse(_ text: String) -> Intent? {
+        let pattern = #"^(?:请问|告诉我|帮我查一下|查一下|查查|查看)?\s*(今天|明天|后天|现在|当前|今日)?(.*?)(今天|明天|后天|现在|当前|今日)?(?:的)?(天气(?:预报|怎么样|如何)?|气温(?:多少|怎么样)?|多少度|会下雨吗|下雨吗|冷不冷|热不热|适合(?:出去玩|出门|散步|跑步|运动)吗|要带伞吗|需要带伞吗|要穿什么|怎么穿衣服|穿什么衣服(?:合适)?)$"#
         guard let regex = try? NSRegularExpression(pattern: pattern),
               let match = regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)) else { return nil }
-        let cityText = Range(match.range(at: 1), in: text).map { String(text[$0]) } ?? ""
-        let day = Range(match.range(at: 2), in: text).map { String(text[$0]) } ?? ""
-        let city = cityText.trimmingCharacters(in: .whitespacesAndNewlines)
+        func group(_ i: Int) -> String {
+            Range(match.range(at: i), in: text).map { String(text[$0]) } ?? ""
+        }
+        let city = group(2).trimmingCharacters(in: .whitespacesAndNewlines)
+        // Reject sentence-like inputs rather than send arbitrary private conversation to geocoding.
+        guard city.count <= 30, !city.contains("我"), !city.contains("你"),
+              !city.contains("因为"), !city.contains("如果"), !city.contains("。"),
+              !city.contains("，"), !city.contains("的"),
+              city.rangeOfCharacter(from: .newlines) == nil else { return nil }
+        let day = group(3).isEmpty ? group(1) : group(3)
+        let purpose = group(4)
+        return Intent(city: city, day: day,
+                      advice: purpose.hasPrefix("适合") || purpose.contains("带伞") || purpose.contains("穿"))
+    }
+
+    static func advice(code: Int, low: Double, high: Double, rain: Int?) -> String {
+        var parts: [String] = []
+        if (95...99).contains(code) {
+            parts.append("有雷雨预报，建议避免户外活动")
+        } else if (71...77).contains(code) || (85...86).contains(code) {
+            parts.append("可能下雪，出门留意路面湿滑")
+        } else if let rain, rain >= 50 {
+            parts.append("降水概率较高，建议带伞并准备室内备选")
+        } else if (51...67).contains(code) || (80...82).contains(code) {
+            parts.append("有雨的预报，出门可以带伞")
+        } else if let rain, rain >= 30 {
+            parts.append("有一定降水可能，可以带把折叠伞")
+        }
+        if high >= 32 {
+            parts.append("高温时段注意防暑和补水")
+        } else if high <= 10 || low <= 0 {
+            parts.append("天气偏冷，建议穿保暖外套")
+        } else if high - low >= 10 {
+            parts.append("早晚温差较大，建议分层穿衣")
+        } else if low < 15 {
+            parts.append("可以准备一件薄外套")
+        }
+        if parts.isEmpty {
+            return "从目前预报看，没有明显的高温、低温或降水信号；出门前可以再确认实时天气。"
+        }
+        return parts.joined(separator: "。") + "。具体活动还需结合实时天气和个人情况。"
+    }
+
+    static func reply(_ text: String) async -> String? {
+        guard let intent = parse(text) else { return nil }
+        let city = intent.city
+        let day = intent.day
         let target = city.isEmpty || ["当地","这里","家里","本地"].contains(city) ?
             (UserDefaults.standard.string(forKey: "homeWeatherCity") ?? "").trimmingCharacters(in: .whitespacesAndNewlines) : city
         guard !target.isEmpty else { return "还没有设置家庭天气城市。你可以说北京明天天气，或在助手中保存默认城市。" }
@@ -89,11 +138,12 @@ enum HomeWeather {
             let dateLabel = index == 1 ? "明天" : index == 2 ? "后天" : "今天"
             let rain = daily.precipitation_probability_max[index].map { "，最高降水概率百分之\($0)" } ?? ""
             let details = "\(dateLabel)\(description(code))，最低\(Int(low.rounded()))度，最高\(Int(high.rounded()))度\(rain)。"
+            let suggestion = intent.advice ? advice(code: code, low: low, high: high, rain: daily.precipitation_probability_max[index]) : ""
             if index == 0 {
                 let current = forecast.current
-                return "\(location)，现在\(description(current.weather_code))，气温\(Int(current.temperature_2m.rounded()))度，体感\(Int(current.apparent_temperature.rounded()))度。\(details)"
+                return "\(location)，现在\(description(current.weather_code))，气温\(Int(current.temperature_2m.rounded()))度，体感\(Int(current.apparent_temperature.rounded()))度。\(details)\(suggestion)"
             }
-            return location + "，" + details
+            return location + "，" + details + suggestion
         } catch {
             return "天气服务暂时没有返回数据，请过一会儿再问。"
         }

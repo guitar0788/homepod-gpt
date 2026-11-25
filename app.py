@@ -130,12 +130,50 @@ def ready():
         db.execute("SELECT 1")
     return {"ok": True}
 
+def deepseek_mode():
+    mode = os.getenv("DEEPSEEK_MODE", "off")
+    if mode not in ("test", "production"):
+        return "off"
+    return mode if providers.configured().get("deepseek") == "deepseek-flash" else "off"
+
+def deepseek_ask(question, req):
+    mode = deepseek_mode()
+    if mode == "off":
+        return speak("DeepSeek 尚未启用。")
+    question = question.strip()
+    if not question:
+        return speak("请说出要问 DeepSeek 的问题。")
+    if len(question) > (300 if mode == "test" else 3000):
+        return speak("问题过长，请缩短后再试。")
+    # Reserve and commit before contacting the paid API. No retry or paid fallback.
+    with database() as db:
+        if mode == "test":
+            allowed = reserve(db, "deepseek-test-lifetime-v1", 3)
+        else:
+            try:
+                maximum = max(1, min(200, int(os.getenv("DEEPSEEK_DAILY_ATTEMPTS", "35"))))
+            except ValueError:
+                maximum = 35
+            allowed = reserve(db, "deepseek-paid:" + time.strftime("%Y-%m-%d", time.gmtime()), maximum)
+        if not allowed:
+            return speak("DeepSeek 调用额度已用完，未发起付费请求。")
+    messages = [{"role": "system", "content": "你是中文语音助手，请直接简短回答。"}, {"role": "user", "content": question}]
+    try:
+        answer = providers.complete("deepseek", "deepseek-flash", messages)
+    except (httpx.HTTPError, ValueError, KeyError, IndexError, TypeError):
+        return speak("DeepSeek 暂时不可用，本次尝试已计入额度，不自动重试。")
+    return speak(answer, "deepseek", model="deepseek-flash", paid=True, mode=mode, history_saved=False)
+
 @app.post("/ask")
 def ask(req: Ask, authorization: str = Header(default="")):
     auth(authorization, "ASSISTANT_TOKEN")
     q = req.text.strip()
     if not q:
         raise HTTPException(422, "请输入问题")
+    # Explicit paid route only, never included in the free model list or fallback.
+    match = re.match(r"^(?:用)?deepseek(?:测试)?[：:，,\\s]*", q, re.IGNORECASE)
+    if req.provider.lower() == "deepseek" or match:
+        return deepseek_ask(q[match.end():] if match else q, req)
     models = available()
     tool, topic = req.tool, q
     with database() as db:
@@ -145,7 +183,7 @@ def ask(req: Ask, authorization: str = Header(default="")):
             raise HTTPException(429, "请求过于频繁")
         preferred = get_setting(db, "provider") if req.provider == "auto" else req.provider.lower()
         if q == "查看模型":
-            return speak("当前：" + preferred + "。可用：" + ("、".join(models) or "无"))
+            return speak("当前：" + preferred + "。免费可用：" + ("、".join(models) or "无") + ("。DeepSeek 已启用，仅显式调用。" if deepseek_mode() != "off" else ""))
         if q.startswith("切换模型"):
             name = q[len("切换模型"):].strip(" ：:").lower()
             if name == "自动":
@@ -247,7 +285,8 @@ def state(q: str = "", authorization: str = Header(default="")):
         row = db.execute("SELECT count FROM limits WHERE bucket=?", (day_bucket(),)).fetchone()
         return {"memory": memories(db, q[:100]), "models": available(),
                 "preferred": get_setting(db, "provider"), "attempts": row[0] if row else 0,
-                "limit": daily_limit(), "configured_spend_policy": "free_only"}
+                "limit": daily_limit(), "configured_spend_policy": "free_only" if deepseek_mode() == "off" else "free_default_paid_explicit",
+                "deepseek_mode": deepseek_mode(), "deepseek_test_used": (db.execute("SELECT count FROM limits WHERE bucket=?", ("deepseek-test-lifetime-v1",)).fetchone() or (0,))[0]}
 
 @app.post("/admin/memory", status_code=201)
 def create(fact: Fact, authorization: str = Header(default="")):

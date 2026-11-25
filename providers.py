@@ -8,7 +8,7 @@ ENDPOINTS = {
     "gemini": "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
     "openrouter": "https://openrouter.ai/api/v1/chat/completions",
     "openai": "https://api.openai.com/v1/chat/completions",
-    "deepseek": "https://api.deepseek.com/v1/chat/completions",
+    "deepseek": "https://api.deepseek.com/chat/completions",
 }
 
 def free_model(name, model):
@@ -31,6 +31,9 @@ def configured():
 
 def complete(name, model, messages):
     payload = {"model": model, "messages": messages, "max_tokens": 420}
+    if name == "deepseek":
+        payload["thinking"] = {"type": "disabled"}
+        payload["max_tokens"] = 128 if os.getenv("DEEPSEEK_MODE") == "test" else 420
     if name == "openrouter":
         payload["provider"] = {"allow_fallbacks": False, "data_collection": "deny",
                                "max_price": {"prompt": 0, "completion": 0}}

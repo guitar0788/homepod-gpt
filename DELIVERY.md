@@ -57,3 +57,7 @@
 - 新建测试记忆“线上持久化验收 20261125-B”；对同一提交触发重新部署 `dep-dc3cr1nlot8c739q78n0`，状态 live 后重新连接管理页，确认该记录和旧记录“云端重启验收 20261125-A”均可读。两条测试记录目前保留在数据库中。
 - 管理页仅列出 Gemini；Render 环境变量列表未显示 `OPENROUTER_KEY` 或 Groq 配置，因此尚无法实际验证免费备用模型及回退。须在对应供应商确认账户免费额度、模型与隐私设置，安全配置密钥后再进行无个人信息的回退测试。
 - 未在现有非空生产库上执行“恢复到空数据库”操作；备份恢复应使用独立空库验证。iPhone 快捷指令与 HomePod mini 尚待设备端安装及实机验收，步骤见 `SHORTCUTS.md`。
+
+## DeepSeek 付费测试（独立于免费路由）
+
+默认关闭。Render 安全环境变量设置 DEEPSEEK_ENABLED=1、DEEPSEEK_MODEL=deepseek-flash、DEEPSEEK_MODE=test，DEEPSEEK_KEY 仅在 Render 存放。语音说“DeepSeek：你的问题”或 API 显式指定 provider=deepseek。测试总共三次尝试（数据库永久计数，失败也计入），每次输入最多300字符、输出128 tokens、关闭思考；不共享历史、记忆或上下文，不自动重试、不自动回退到付费模型。正式启用须另行将 DEEPSEEK_MODE 改为 production，默认日上限35次，仍须显式调用，正式版完整记忆接入待升级。配置不等于真实调用验收。密钥不得提交。

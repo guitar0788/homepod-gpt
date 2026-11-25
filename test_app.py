@@ -107,5 +107,41 @@ class AssistantTests(unittest.TestCase):
             self.assertEqual(post.call_args.kwargs["json"]["provider"]["max_price"],
                              {"prompt": 0, "completion": 0})
 
+    def test_deepseek_paid_gate_and_lifetime_limit(self):
+        settings = {"DEEPSEEK_ENABLED": "1", "DEEPSEEK_KEY": "mock",
+                    "DEEPSEEK_MODEL": "deepseek-flash", "DEEPSEEK_MODE": "test"}
+        with patch.dict(os.environ, settings), patch("providers.complete", return_value="完成") as call:
+            self.assertEqual(self.ask("你好").json()["provider"], "groq")
+            self.assertNotIn("deepseek", self.client.get("/admin/state", headers=self.admin).json()["models"])
+            self.assertEqual(self.ask("DeepSeek：" + "长" * 301).json()["provider"], "local")
+            self.assertEqual(call.call_count, 1)
+            self.assertEqual(self.ask("DeepSeek：你好", use_history=True, share_memory=True).json()["provider"], "deepseek")
+            self.assertEqual(call.call_args.args[2][-1]["content"], "你好")
+            self.assertEqual(len(call.call_args.args[2]), 2)
+            call.side_effect = httpx.ReadTimeout("mock")
+            self.assertIn("不自动重试", self.ask("DeepSeek：测试").json()["speech"])
+            self.ask("DeepSeek：测试")
+            self.assertIn("额度已用完", self.ask("DeepSeek：测试").json()["speech"])
+            self.assertEqual(call.call_count, 4)
+            with TestClient(app) as restarted:
+                self.assertIn("额度已用完", restarted.post("/ask", headers=self.voice, json={"text": "DeepSeek：测试"}).json()["speech"])
+                self.assertEqual(call.call_count, 4)
+
+    def test_deepseek_disabled_by_default_and_no_paid_fallback(self):
+        with patch.dict(os.environ, {"DEEPSEEK_ENABLED": "1", "DEEPSEEK_KEY": "mock", "DEEPSEEK_MODEL": "deepseek-flash"}), patch("providers.complete", side_effect=httpx.ReadTimeout("mock")) as call:
+            self.assertIn("尚未启用", self.ask("DeepSeek：你好").json()["speech"])
+            call.assert_not_called()
+            self.assertEqual(self.ask("你好").status_code, 503)
+            self.assertEqual([c.args[0] for c in call.call_args_list], ["groq", "openrouter"])
+
+    def test_deepseek_test_payload(self):
+        response = httpx.Response(200, request=httpx.Request("POST", providers.ENDPOINTS["deepseek"]),
+                                  json={"choices": [{"message": {"content": "你好"}}]})
+        with patch.dict(os.environ, {"DEEPSEEK_MODE": "test", "DEEPSEEK_KEY": "mock"}), patch("providers.httpx.post", return_value=response) as post:
+            providers.complete("deepseek", "deepseek-flash", [])
+            payload = post.call_args.kwargs["json"]
+            self.assertEqual(payload["max_tokens"], 128)
+            self.assertEqual(payload["thinking"], {"type": "disabled"})
+
 if __name__ == "__main__":
     unittest.main()

@@ -171,7 +171,7 @@ def ask(req: Ask, authorization: str = Header(default="")):
     if not q:
         raise HTTPException(422, "请输入问题")
     # Explicit paid route only, never included in the free model list or fallback.
-    match = re.match(r"^(?:用)?deepseek(?:测试)?[：:，,\\s]*", q, re.IGNORECASE)
+    match = re.match(r"^(?:用\s*deepseek\s*测试[：:，,\s]*|deepseek(?:\s*测试)?[：:，,\s]+)", q, re.IGNORECASE)
     if req.provider.lower() == "deepseek" or match:
         return deepseek_ask(q[match.end():] if match else q, req)
     models = available()

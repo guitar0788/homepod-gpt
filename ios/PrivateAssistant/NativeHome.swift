@@ -18,6 +18,9 @@ enum NativeHome {
             formatter.dateFormat = text.hasPrefix("今天") ? "yyyy年M月d日 EEEE" : "HH点mm分"
             return formatter.string(from: Date())
         }
+        if case .plan(let parts) = HomeCompoundRules.parse(text), parts.contains(where:{$0.action}) {
+            return "组合执行需要通过语音询问入口确认，本次未执行。"
+        }
         if let scene = HomeSceneKind.parse(text) { return await HomeScenes.report(scene,privateAccess:false) }
         if ReadRouting.compound(text) {
             if let result = await SmartHome.reply(text) { return result }

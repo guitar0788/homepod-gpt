@@ -117,8 +117,26 @@ struct AskIntent: AppIntent {
     var question: String
 
     func perform() async throws -> some IntentResult & ProvidesDialog {
-        let speech = await AssistantAPI.ask(question)
-        return .result(dialog: "\(speech)")
+        switch HomeCompoundRules.parse(question) {
+        case .none:
+            let speech = await AssistantAPI.ask(question)
+            return .result(dialog:"\(speech)")
+        case .unsupported:
+            // Preserve the existing on-device AI weather/time parser for natural compound reads.
+            if ReadRouting.compound(question), let speech = await SmartHome.reply(question) {
+                return .result(dialog:"\(speech)")
+            }
+            return .result(dialog:"这个组合里有暂不支持或不明确的操作，请分开说明。本次没有执行任何操作。")
+        case .plan(let parts):
+            guard HomeCompound.valid(parts) else {
+                return .result(dialog:"组合指令中有无法确认的参数，请分开说明。本次没有执行任何操作。")
+            }
+            if parts.contains(where:{$0.action}) {
+                try await requestConfirmation()
+            }
+            let speech = await HomeCompound.execute(parts)
+            return .result(dialog:"\(speech)")
+        }
     }
 }
 

@@ -37,6 +37,12 @@ jobs:
           cp ios/tests/ReadRoutingTests.swift "$temp/main.swift"
           swiftc ios/PrivateAssistant/ReadRouting.swift "$temp/main.swift" -o "$temp/test-routing"
           "$temp/test-routing"
+      - name: Test compound service routing
+        run: |
+          temp="$(mktemp -d)"
+          cp ios/tests/CompoundRulesTests.swift "$temp/main.swift"
+          swiftc ios/PrivateAssistant/ReadRouting.swift ios/PrivateAssistant/HomeCompoundRules.swift "$temp/main.swift" -o "$temp/test-compound"
+          "$temp/test-compound"
       - name: Build unsigned iPhone IPA
         run: bash ios/build-unsigned.sh
       - name: Upload unsigned artifact

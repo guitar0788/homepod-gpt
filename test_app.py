@@ -257,5 +257,52 @@ class AssistantTests(unittest.TestCase):
         self.assertLess(len(result),350)
         self.assertIn("继续问", result)
 
+    def test_adaptive_detail_and_full_replay(self):
+        answer = "这是完整的详细回答。" * 50
+        with patch("providers.complete", return_value=answer) as call:
+            ordinary = self.ask("介绍一下这个话题", use_history=True).json()
+            self.assertLess(len(ordinary["speech"]), 350)
+            full = self.ask("完整朗读上一条", use_history=True).json()
+            self.assertEqual(full["speech"], answer)
+            self.assertEqual(call.call_count, 1)
+            detail = self.ask("再详细一点", use_history=True).json()
+            self.assertGreater(len(detail["speech"]), len(ordinary["speech"]))
+            self.assertEqual(call.call_args.kwargs["max_tokens"], 900)
+            self.assertIn("深入回答", str(call.call_args))
+
+    def test_new_topic_summary_can_resume_and_backup_preserves_boundary(self):
+        from app import database
+        import continuity
+        with database() as db:
+            db.execute("INSERT INTO history(question,answer) VALUES (?,?)", ("旧秘密话题", "旧回答"))
+        self.ask("换个话题", use_history=True)
+        with database() as db:
+            floor = db.execute("SELECT MAX(id) FROM history").fetchone()[0]
+            for i in range(12):
+                db.execute("INSERT INTO history(question,answer) VALUES (?,?)", ("新话题"+str(i), "新回答"))
+            state = continuity.snapshot(db, floor)
+            self.assertEqual(len(state.older), 4)
+            self.assertNotIn("旧秘密话题", str(state))
+        with patch("providers.complete", return_value='{"answer":"继续聊","summary":"新话题摘要"}') as call:
+            self.ask("继续", use_history=True)
+            self.assertNotIn("旧秘密话题", str(call.call_args))
+        saved = self.client.get("/admin/backup", headers=self.admin).json()
+        self.assertEqual(saved["session_excluded"], 1)
+        self.assertEqual(saved["history_summary"], "新话题摘要")
+        self.client.delete("/admin/history", headers={**self.admin,"X-Confirm":"delete-history"})
+        self.assertEqual(self.client.post("/admin/restore",headers={**self.admin,"X-Confirm":"restore"},json=saved).status_code,200)
+        with patch("providers.complete", return_value="好") as call:
+            self.ask("继续",use_history=True)
+            self.assertNotIn("旧秘密话题",str(call.call_args))
+
+    def test_memory_proposal_is_not_truncated(self):
+        import json
+        fact = "我喜欢" + "阅读" * 115
+        raw = json.dumps({"answer":"好的","memory":fact,"research":[]},ensure_ascii=False)
+        with patch("providers.complete",return_value=raw):
+            result = self.ask(fact,share_memory=True).json()
+            self.assertIn(fact,result["speech"])
+            self.assertEqual(result["memory_proposal"],fact)
+
 if __name__ == "__main__":
     unittest.main()

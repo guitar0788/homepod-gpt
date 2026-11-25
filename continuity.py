@@ -9,10 +9,12 @@ class Snapshot:
     recent: list
     older: list
 
-def snapshot(db):
+def snapshot(db, floor=0):
     revision, through_id, summary = db.execute(
         "SELECT revision,through_id,summary FROM conversation_state WHERE id=1").fetchone()
-    recent = list(db.execute("SELECT id,question,answer FROM history ORDER BY id DESC LIMIT 8"))
+    if through_id < floor:
+        through_id, summary = floor, ""
+    recent = list(db.execute("SELECT id,question,answer FROM history WHERE id>? ORDER BY id DESC LIMIT 8", (floor,)))
     older = list(db.execute(
         "SELECT id,question,answer FROM history WHERE id>? AND id<? ORDER BY id LIMIT 8",
         (through_id, recent[-1][0]))) if recent else []
@@ -46,7 +48,7 @@ def export(db):
     through_id, summary = db.execute("SELECT through_id,summary FROM conversation_state WHERE id=1").fetchone()
     rows = list(db.execute("SELECT id,question,answer FROM history ORDER BY id"))
     return {"history": [(q,a) for _,q,a in rows], "history_summary": summary,
-            "summary_covered": sum(1 for i,_,_ in rows if i <= through_id)}
+            "summary_covered": sum(1 for i,_,_ in rows if i <= through_id) if summary else 0}
 
 def restore(db, data):
     through_id = 0

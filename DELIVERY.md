@@ -61,3 +61,7 @@
 ## DeepSeek 付费测试（独立于免费路由）
 
 默认关闭。Render 安全环境变量设置 DEEPSEEK_ENABLED=1、DEEPSEEK_MODEL=deepseek-flash、DEEPSEEK_MODE=test，DEEPSEEK_KEY 仅在 Render 存放。语音说“DeepSeek：你的问题”或 API 显式指定 provider=deepseek。测试总共三次尝试（数据库永久计数，失败也计入），每次输入最多300字符、输出128 tokens、关闭思考；不共享历史、记忆或上下文，不自动重试、不自动回退到付费模型。正式启用须另行将 DEEPSEEK_MODE 改为 production，默认日上限35次，仍须显式调用，正式版完整记忆接入待升级。配置不等于真实调用验收。密钥不得提交。
+
+## 个人助手 V2 开发验收
+
+开发范围：本地规则识别简单喜好、用户二次确认后持久保存、按相关性排序检索、优化中文口语提示、后台显示 DeepSeek 测试剩余次数，以及付费请求与免费请求共享每分钟限流。默认关闭记忆建议；不追加任何 DeepSeek 调用或额度，不改变现有令牌和模型配置。新增测试全部使用模拟上游。分支先通过 GitHub Actions 单元测试再发布；HomePod 真机仍待验证。

@@ -143,5 +143,40 @@ class AssistantTests(unittest.TestCase):
             self.assertEqual(payload["max_tokens"], 128)
             self.assertEqual(payload["thinking"], {"type": "disabled"})
 
+    def test_memory_suggestions_require_confirmation(self):
+        with patch("providers.complete", return_value="正常回答") as call:
+            self.assertEqual(self.ask("我喜欢吃荔枝").json()["provider"], "groq")
+            self.assertEqual(self.client.get("/admin/state", headers=self.admin).json()["memory"], [])
+            self.assertIn("已开启", self.ask("开启记忆建议").json()["speech"])
+            self.assertIn("确认记忆", self.ask("我喜欢吃荔枝").json()["speech"])
+            self.assertEqual(call.call_count, 1)
+            self.assertEqual(self.client.get("/admin/state", headers=self.admin).json()["memory"], [])
+            self.assertIn("已保存", self.ask("确认记忆").json()["speech"])
+            self.assertIn("已经", self.ask("我喜欢吃荔枝").json()["speech"])
+            self.assertEqual(len(self.client.get("/admin/state", headers=self.admin).json()["memory"]), 1)
+            self.ask("我喜欢喝茶")
+            self.ask("取消记忆")
+            self.assertIn("没有待确认", self.ask("确认记忆").json()["speech"])
+            self.assertIn("已关闭", self.ask("关闭记忆建议").json()["speech"])
+            self.assertEqual(call.call_count, 1)
+
+    def test_local_retrieval_ranking_and_sensitive_exclusion(self):
+        from personal_memory import preference_candidate, relevant_memories, PendingMemory
+        self.assertIsNone(preference_candidate("我喜欢吃什么？"))
+        self.assertIsNone(preference_candidate("我喜欢看银行卡密码"))
+        self.assertEqual(preference_candidate("我喜欢吃荔枝。"), "我喜欢吃荔枝")
+        self.assertEqual(relevant_memories("荔枝来自哪里", ["我来自北京", "荔枝来自广东"])[0], "荔枝来自广东")
+        self.assertEqual(relevant_memories("我的喜好", ["不相关", "我喜欢吃荔枝"]), ["我喜欢吃荔枝"])
+        pending = PendingMemory(ttl=0)
+        pending.offer("我喜欢喝茶")
+        self.assertIsNone(pending.take())
+
+    def test_paid_route_uses_shared_rate_limit(self):
+        with patch.dict(os.environ, {"DEEPSEEK_ENABLED": "1", "DEEPSEEK_KEY": "mock", "DEEPSEEK_MODEL": "deepseek-flash", "DEEPSEEK_MODE": "test"}), patch("providers.complete") as call:
+            for _ in range(12):
+                self.assertEqual(self.ask("查看模型").status_code, 200)
+            self.assertEqual(self.ask("DeepSeek：测试").status_code, 429)
+            call.assert_not_called()
+
 if __name__ == "__main__":
     unittest.main()

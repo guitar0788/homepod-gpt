@@ -18,7 +18,9 @@ async function load() {
   const state = await api("/admin/state?q=" + encodeURIComponent(field("query").value));
   const models = Object.entries(state.models).map(([name, model]) => name + " / " + model);
   status.textContent = "免费请求 " + state.attempts + "/" + state.limit + "（UTC 日）｜当前 " +
-    state.preferred + "｜" + (models.join("、") || "无可用模型");
+    state.preferred + "｜" + (models.join("、") || "无可用模型") +
+    "｜记忆建议：" + (state.memory_suggestions ? "已开启" : "关闭") +
+    (state.deepseek_mode === "test" ? "｜DeepSeek 测试剩余：" + Math.max(0, state.deepseek_test_limit - state.deepseek_test_used) + "/" + state.deepseek_test_limit : "｜DeepSeek：" + (state.deepseek_mode || "off"));
   const selector = field("provider");
   selector.replaceChildren(new Option("自动", "auto"));
   for (const name of Object.keys(state.models)) selector.add(new Option(name, name));

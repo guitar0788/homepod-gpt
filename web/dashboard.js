@@ -81,3 +81,15 @@ bind("clear", async () => {
   await api("/admin/history", "DELETE", undefined, "delete-history");
   await load();
 });
+
+bind("ask", async () => {
+  const output = field("reply");
+  output.textContent = "正在请求…";
+  const response = await fetch("/ask", {
+    method: "POST",
+    headers: {"Content-Type": "application/json", Authorization: "Bearer " + field("voiceToken").value},
+    body: JSON.stringify({text: field("question").value})
+  });
+  const result = await response.json();
+  output.textContent = response.ok ? result.answer + "（" + (result.model || result.provider) + "）" : (result.detail || "请求失败");
+});

@@ -1,0 +1,28 @@
+# Template: activate only after verifying account's Actions spending is blocked.
+# Copy to .github/workflows/build-ios.yml on default branch to enable manual dispatch.
+name: Build unsigned iPhone IPA
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: xcode-27
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ios-app-intents-prototype
+          persist-credentials: false
+      - name: Prepare XcodeGen
+        run: |
+          command -v xcodegen || brew install xcodegen
+      - name: Build unsigned iPhone IPA
+        run: bash ios/build-unsigned.sh
+      - name: Upload unsigned artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: PrivateAssistant-unsigned
+          path: ios/dist/
+          if-no-files-found: error
+          retention-days: 1

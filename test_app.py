@@ -143,5 +143,57 @@ class AssistantTests(unittest.TestCase):
             self.assertEqual(payload["max_tokens"], 128)
             self.assertEqual(payload["thinking"], {"type": "disabled"})
 
+    def test_agent_memory_only_after_confirmation(self):
+        import json
+        proposal = json.dumps({"answer": "好的", "memory": "我平时喜欢喝茶", "research": []}, ensure_ascii=False)
+        with patch("providers.complete", return_value=proposal) as call:
+            result = self.ask("我平时喜欢喝茶").json()
+            self.assertNotIn("是否记住", result["speech"])
+            result = self.ask("我平时喜欢喝茶", share_memory=True).json()
+            self.assertIn("是否记住", result["speech"])
+            self.assertEqual(self.client.get("/admin/state", headers=self.admin).json()["memory"], [])
+            self.assertIn("已保存", self.ask("记下来吧", share_memory=True).json()["speech"])
+            self.assertEqual(self.client.get("/admin/state", headers=self.admin).json()["memory"][0]["fact"], "我平时喜欢喝茶")
+            self.assertEqual(call.call_count, 2)
+
+    def test_agent_research_and_budget(self):
+        import json
+        plan = json.dumps({"answer":"待查证", "research":[{"tool":"search","query":"量子计算"}, {"tool":"news","query":"量子计算"}], "memory":""}, ensure_ascii=False)
+        evidence = [{"title":"量子计算", "url":"https://zh.wikipedia.org/?curid=1", "snippet":"百科摘要"}]
+        with patch("providers.complete", side_effect=[plan, "综合结果"]) as call, patch("app.lookup", return_value=evidence) as lookup:
+            result = self.ask("请分析量子计算最新进展").json()
+            self.assertEqual(result["answer"], "综合结果")
+            self.assertEqual(result["agent_attempts"], 2)
+            self.assertEqual(lookup.call_count, 2)
+            self.assertEqual(call.call_count, 2)
+            self.assertTrue(result["sources"])
+            self.assertEqual(self.client.get("/admin/state", headers=self.admin).json()["attempts"], 2)
+
+    def test_agent_blocks_private_query_and_invented_memory(self):
+        import json
+        import agent
+        raw = json.dumps({"answer":"好","research":[{"tool":"news","query":"秘密令牌"},{"tool":"delete","query":"秘密令牌"}],"memory":"我喜欢红茶"}, ensure_ascii=False)
+        result = agent.plan(raw, "我的秘密令牌是什么", True)
+        self.assertEqual(result.research, [])
+        self.assertEqual(result.memory, "")
+        self.assertEqual(agent.plan("普通文本", "问题").answer, "普通文本")
+        self.assertEqual(agent.plan('{"answer":', "问题").research, [])
+
+    def test_agent_paid_no_automatic_routing(self):
+        import json
+        raw = json.dumps({"answer":"继续","research":[{"tool":"deepseek","query":"测试"}],"memory":""}, ensure_ascii=False)
+        with patch.dict(os.environ, {"DEEPSEEK_MODE":"test","DEEPSEEK_ENABLED":"1","DEEPSEEK_KEY":"mock","DEEPSEEK_MODEL":"deepseek-flash"}), patch("providers.complete", return_value=raw) as call:
+            self.assertEqual(self.ask("测试").json()["provider"], "groq")
+            self.assertEqual(call.call_count, 1)
+            self.assertEqual(self.client.get("/admin/state", headers=self.admin).json()["deepseek_test_used"], 0)
+
+    def test_agent_research_budget_exhaustion(self):
+        import json
+        raw = json.dumps({"answer":"未查证","research":[{"tool":"search","query":"量子计算"}]}, ensure_ascii=False)
+        with patch.dict(os.environ, {"DAILY_ATTEMPTS":"1"}), patch("providers.complete", return_value=raw) as call, patch("app.lookup", return_value=[{"title":"量子计算","url":"https://zh.wikipedia.org/?curid=1"}]):
+            result = self.ask("分析量子计算").json()
+            self.assertIn("无法综合", result["answer"])
+            self.assertEqual(call.call_count, 1)
+
 if __name__ == "__main__":
     unittest.main()

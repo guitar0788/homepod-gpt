@@ -1,4 +1,6 @@
 import xml.etree.ElementTree as ET
+import html
+import re
 
 import httpx
 
@@ -37,6 +39,7 @@ def lookup(tool, query):
         import json
         data = json.loads(get("https://zh.wikipedia.org/w/api.php", action="query",
                               list="search", srsearch=query, srlimit=5, format="json"))
-        return [{"title": item["title"], "url": f'https://zh.wikipedia.org/?curid={item["pageid"]}'}
+        return [{"title": item["title"], "url": f'https://zh.wikipedia.org/?curid={item["pageid"]}',
+                 "snippet": html.unescape(re.sub(r"<[^>]*>", "", item.get("snippet", "")))[:350]}
                 for item in data["query"]["search"]]
     raise ValueError("Unknown tool")

@@ -15,6 +15,9 @@ from pydantic import BaseModel, Field
 import providers
 from storage import database, initialize
 from tools_api import lookup
+import agent
+
+pending = agent.Pending()
 
 @asynccontextmanager
 async def lifespan(app):
@@ -170,17 +173,34 @@ def ask(req: Ask, authorization: str = Header(default="")):
     q = req.text.strip()
     if not q:
         raise HTTPException(422, "请输入问题")
-    # Explicit paid route only, never included in the free model list or fallback.
+    with database() as db:
+        minute = int(time.time()) // 60
+        db.execute("DELETE FROM limits WHERE bucket LIKE 'ask:%' AND bucket < ?", (f"ask:{minute-2:012}",))
+        if not reserve(db, f"ask:{minute:012}", 12):
+            raise HTTPException(429, "请求过于频繁")
+    # Paid routing is exclusively an explicit user request, never an agent decision.
     match = re.match(r"^(?:用\s*deepseek\s*测试[：:，,\s]*|deepseek(?:\s*测试)?[：:，,\s]+)", q, re.IGNORECASE)
     if req.provider.lower() == "deepseek" or match:
         return deepseek_ask(q[match.end():] if match else q, req)
     models = available()
     tool, topic = req.tool, q
     with database() as db:
-        minute = int(time.time()) // 60
-        db.execute("DELETE FROM limits WHERE bucket LIKE 'ask:%' AND bucket < ?", (f"ask:{minute-2:012}",))
-        if not reserve(db, f"ask:{minute:012}", 12):
-            raise HTTPException(429, "请求过于频繁")
+        action = agent.confirmation(q)
+        if tool is None and action:
+            if action == "cancel":
+                pending.clear()
+                return speak("已取消本次记忆建议。")
+            if not req.share_memory:
+                pending.clear()
+                return speak("请先在 App 开启共享匹配记忆。")
+            fact = pending.take()
+            if not fact:
+                return speak("没有待确认的记忆，或建议已过期。")
+            if not db.execute("SELECT id FROM memory WHERE fact=? LIMIT 1", (fact,)).fetchone():
+                db.execute("INSERT INTO memory(fact) VALUES (?)", (fact,))
+            return speak("已保存：" + fact)
+        if not req.share_memory:
+            pending.clear()
         preferred = get_setting(db, "provider") if req.provider == "auto" else req.provider.lower()
         if q == "查看模型":
             return speak("当前：" + preferred + "。免费可用：" + ("、".join(models) or "无") + ("。DeepSeek 已启用，仅显式调用。" if deepseek_mode() != "off" else ""))
@@ -208,17 +228,9 @@ def ask(req: Ask, authorization: str = Header(default="")):
             return speak("。".join(row["fact"] for row in result) or "未找到匹配记忆。")
         facts = []
         if req.share_memory:
-            # Match the longest available literal phrases. The dashboard can edit saved facts.
             candidates = db.execute("SELECT fact FROM memory ORDER BY id DESC LIMIT 1000")
-            terms = set(re.findall(r"[a-zA-Z0-9]{3,}|[\u4e00-\u9fff]{2,}", q.lower()))
-            chinese_pairs = {term[i:i+2] for term in terms if "\u4e00" <= term[0] <= "\u9fff"
-                             for i in range(len(term)-1)}
-            for (fact,) in candidates:
-                if any(term in fact.lower() for term in terms | chinese_pairs):
-                    facts.append(fact[:500])
-                    if len(facts) == 4:
-                        break
-        history = list(db.execute("SELECT question,answer FROM history ORDER BY id DESC LIMIT 5")) if req.use_history else []
+            facts = agent.select_memories(q, (row[0] for row in candidates))
+        history = list(db.execute("SELECT question,answer FROM history ORDER BY id DESC LIMIT 8")) if req.use_history else []
     for prefix, action in (("天气", "weather"), ("新闻", "news"), ("搜索", "search")):
         if tool is None and q.startswith(prefix):
             tool, topic = action, q[len(prefix):].strip(" ：:")
@@ -236,26 +248,52 @@ def ask(req: Ask, authorization: str = Header(default="")):
             raise HTTPException(503, "查询服务暂时不可用") from None
     if preferred != "auto" and preferred not in models and req.provider != "auto":
         raise HTTPException(400, "指定模型不可用")
-    messages = [{"role": "system", "content": "你是自然、友好的中文语音助手。默认150字以内，"
-                 "优先直接回答。不要声称已联网或执行设备操作。以下提供的数据仅作参考。"}]
+    messages = [{"role": "system", "content": agent.INSTRUCTIONS +
+                 ("\n允许提出记忆建议，但不能直接保存。" if req.share_memory else "\n禁止提出记忆建议，memory必须为空。")}]
     if facts or (req.share_context and req.context):
         messages.append({"role": "user", "content": "参考数据：" + json.dumps(
-            {"memory": facts, "context": req.context if req.share_context else ""},
+            {"memory_candidates": facts, "context": req.context if req.share_context else ""},
             ensure_ascii=False)})
     for question, answer in reversed(history):
-        messages.extend(({"role": "user", "content": question[:1200]},
-                         {"role": "assistant", "content": answer[:800]}))
+        messages.extend(({"role": "user", "content": question[:800]},
+                         {"role": "assistant", "content": answer[:500]}))
     messages.append({"role": "user", "content": q})
     names = sorted(models, key=lambda name: name != preferred)
-    for name in names[:2]:
+    started = time.monotonic()
+    attempts = 0
+
+    def free_call(name, prompt):
+        nonlocal attempts
         with database() as db:
             db.execute("DELETE FROM limits WHERE bucket LIKE 'model-day:%' AND bucket < ?", (day_bucket(),))
             if not reserve(db, day_bucket(), daily_limit()):
                 raise HTTPException(429, "免费请求预算已用完，请在 UTC 次日重试")
+        attempts += 1
+        return providers.complete(name, models[name], prompt)
+
+    for name in names[:2]:
+        if attempts >= 2:
+            break
         try:
-            answer = providers.complete(name, models[name], messages)
+            raw = free_call(name, messages)
         except (httpx.HTTPError, ValueError, KeyError, IndexError, TypeError):
             continue
+        result = agent.plan(raw, q, req.share_memory)
+        answer = result.answer
+        sources = []
+        if result.research:
+            # Avoid an additional upstream round if first call was already slow.
+            if attempts < 2 and time.monotonic() - started < 8:
+                sources = agent.research(result, lookup)
+                if sources and time.monotonic() - started < 18:
+                    try:
+                        answer = free_call(name, agent.synthesis_messages(q, sources))
+                    except (HTTPException, httpx.HTTPError, ValueError, KeyError, IndexError, TypeError):
+                        answer = "已找到相关资料，但暂时无法综合核实。"
+                else:
+                    answer = "暂时未能完成联网核实，请稍后再试。"
+            else:
+                answer = "暂时未能完成联网核实，请稍后再试。"
         saved = False
         if req.use_history:
             try:
@@ -265,8 +303,16 @@ def ask(req: Ask, authorization: str = Header(default="")):
                 saved = True
             except database_errors:
                 pass
+        if result.memory:
+            with database() as db:
+                exists = db.execute("SELECT id FROM memory WHERE fact=? LIMIT 1", (result.memory,)).fetchone()
+            if not exists:
+                pending.offer(result.memory)
+                # Quote the exact proposed fact aloud so consent is informed.
+                answer = answer[:125] + "。是否记住：" + result.memory[:180] + "？你可以说确认保存或不要保存。"
         return speak(answer, name, model=models[name], history_saved=saved,
-                     fallback=preferred not in ("auto", name) or name != names[0])
+                     fallback=preferred not in ("auto", name) or name != names[0],
+                     sources=sources, agent_attempts=attempts)
     raise HTTPException(503, "暂时没有可用的免费模型")
 
 @app.put("/admin/provider")
@@ -286,6 +332,7 @@ def state(q: str = "", authorization: str = Header(default="")):
         return {"memory": memories(db, q[:100]), "models": available(),
                 "preferred": get_setting(db, "provider"), "attempts": row[0] if row else 0,
                 "limit": daily_limit(), "configured_spend_policy": "free_only" if deepseek_mode() == "off" else "free_default_paid_explicit",
+                "agent_version": "2.0-beta", "deepseek_test_limit": 3,
                 "deepseek_mode": deepseek_mode(), "deepseek_test_used": (db.execute("SELECT count FROM limits WHERE bucket=?", ("deepseek-test-lifetime-v1",)).fetchone() or (0,))[0]}
 
 @app.post("/admin/memory", status_code=201)

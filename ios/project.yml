@@ -22,5 +22,7 @@ targets:
         INFOPLIST_KEY_NSHealthShareUsageDescription: 仅在设备上读取您授权的步数、步行距离及活动能量，用于今日健康语音报告，不上传云端。
         CODE_SIGN_ENTITLEMENTS: PrivateAssistant/PrivateAssistant.entitlements
         INFOPLIST_KEY_NSAppleMusicUsageDescription: 用于您主动要求的音乐搜索和播放控制。
-        MARKETING_VERSION: "0.4.0"
-        CURRENT_PROJECT_VERSION: "4"
+        INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription: 用于您主动要求查看的本机日历日程，不上传云端。
+        INFOPLIST_KEY_NSRemindersFullAccessUsageDescription: 用于您主动要求创建的本机提醒事项，不上传云端。
+        MARKETING_VERSION: "0.5.0"
+        CURRENT_PROJECT_VERSION: "5"

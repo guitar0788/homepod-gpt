@@ -136,6 +136,7 @@ struct PrivateAssistantShortcuts: AppShortcutsProvider {
         AppShortcut(intent: HealthReportIntent(),
                     phrases: ["用 \(.applicationName) 查看今日健康报告", "查看 \(.applicationName) 的健康报告"],
                     shortTitle: "今日健康", systemImageName: "heart.text.square")
+        AppShortcut(intent: HomePrivateTasksIntent(), phrases: ["用 \(.applicationName) 管理日程与提醒", "使用 \(.applicationName) 的家庭日程"], shortTitle: "日程与提醒", systemImageName: "calendar")
     }
 }
 
@@ -153,6 +154,7 @@ struct SettingsView: View {
     @State private var checking = false
     @State private var healthStatus = ""
     @State private var musicStatus = ""
+    @State private var taskStatus = ""
     @AppStorage("homeWeatherCity") private var homeWeatherCity = ""
     @AppStorage("useHistory") private var useHistory = false
     @AppStorage("shareMemory") private var shareMemory = false
@@ -204,6 +206,13 @@ struct SettingsView: View {
                     if !musicStatus.isEmpty { Text(musicStatus) }
                     HStack { Text("选择音频输出"); Spacer(); HomeAudioRoutePicker().frame(width: 44, height: 44) }
                     Text("Siri 原有功能不受影响。进入增强助手后，可以问明天适不适合出门、要不要带伞，或要求睡前音乐。音乐由系统播放器执行；HomePod 音频路由需真机验证。").font(.footnote)
+                }
+                Section("家庭日程与提醒") {
+                    Button("授权日历读取") { Task { taskStatus = await HomeTasks.authorizeCalendar() } }
+                    Button("授权提醒事项") { Task { taskStatus = await HomeTasks.authorizeReminders() } }
+                    Button("授权手机计时通知") { Task { taskStatus = await HomeTasks.authorizeNotifications() } }
+                    if !taskStatus.isEmpty { Text(taskStatus) }
+                    Text("日程和提醒使用独立的本机身份验证语音入口；不上传云端。计时提醒由 iPhone 通知发出，不会保证 HomePod 响铃。").font(.footnote)
                 }
                 Section("HomePod 测试") {
                     Text("先说：嘿 Siri，测试私人助手的连接。")

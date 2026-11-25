@@ -13,9 +13,9 @@ enum NativeHome {
         }
         if let result = await HomeWeather.reply(text) { return result }
         if let result = await HomeMusic.reply(text) { return result }
-        if text.hasPrefix("设置闹钟") || text.hasPrefix("设个闹钟") || text.hasPrefix("设置计时器") || text.hasPrefix("提醒我") {
-            return "这个版本还没有接入闹钟、计时器或提醒事项执行接口。"
-        }
+        if let result = await HomeTasks.timer(text) { return result }
+        if HomeTasks.isPrivate(text) { return "请使用本助手的家庭日程与提醒功能进行本机身份验证，日程及提醒内容不会发送云端。" }
+        if text.contains("闹钟") || text.contains("计时") { return "暂不支持此闹钟或计时表达。可以说设置五分钟计时器；该功能使用手机通知，不是系统闹钟。" }
         if ["今日健康报告", "今天的健康报告", "我的健康数据", "我今天走了多少步", "今天走了多少步", "我今天消耗了多少卡路里", "我今天走了多远"].contains(text) {
             return "请使用私人助手的今日健康报告功能，系统会要求本机身份验证。健康记录不会发送到 AI 云端。"
         }

@@ -1,3 +1,4 @@
+import logging
 import os
 
 import httpx
@@ -33,8 +34,10 @@ def complete(name, model, messages):
     if name == "openrouter":
         payload["provider"] = {"allow_fallbacks": False, "data_collection": "deny",
                                "max_price": {"prompt": 0, "completion": 0}}
-    response = httpx.post(ENDPOINTS[name], json=payload, timeout=7,
+    response = httpx.post(ENDPOINTS[name], json=payload, timeout=httpx.Timeout(25.0, connect=5.0),
                           headers={"Authorization": "Bearer " + os.environ[name.upper() + "_KEY"]})
+    if response.is_error:
+        logging.getLogger(__name__).warning("Provider %s returned HTTP %s", name, response.status_code)
     response.raise_for_status()
     answer = response.json()["choices"][0]["message"]["content"]
     if not isinstance(answer, str) or not answer.strip():

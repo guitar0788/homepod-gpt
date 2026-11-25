@@ -29,8 +29,8 @@ def configured():
             result[name] = model
     return result
 
-def complete(name, model, messages):
-    payload = {"model": model, "messages": messages, "max_tokens": 420}
+def complete(name, model, messages, max_tokens=420):
+    payload = {"model": model, "messages": messages, "max_tokens": min(900, max(1, max_tokens)) if free_model(name, model) else 420}
     if name == "deepseek":
         payload["thinking"] = {"type": "disabled"}
         payload["max_tokens"] = 128 if os.getenv("DEEPSEEK_MODE") == "test" else 420

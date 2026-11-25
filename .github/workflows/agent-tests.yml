@@ -1,7 +1,7 @@
 name: Agent regression tests
 on:
   push:
-    branches: [agent-v2]
+    branches: [agent-v2, agent-v2-1]
 permissions:
   contents: read
 jobs:

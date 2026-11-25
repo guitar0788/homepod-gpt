@@ -30,8 +30,9 @@ class Plan:
     answer: str
     research: list = field(default_factory=list)
     memory: str = ""
+    summary: str = ""
 
-def plan(raw, question, allow_memory=False):
+def plan(raw, question, allow_memory=False, allow_summary=False):
     raw = raw.strip()
     try:
         clean = re.sub(r"^\s*\x60\x60\x60(?:json)?\s*|\s*\x60\x60\x60\s*$", "", raw, flags=re.I)
@@ -67,7 +68,9 @@ def plan(raw, question, allow_memory=False):
         memory = ""
     else:
         memory = memory.strip()
-    return Plan(answer or "我暂时无法给出完整回答。", research, memory)
+    summary = data.get("summary")
+    summary = summary.strip() if allow_summary and isinstance(summary, str) and 1 <= len(summary.strip()) <= 500 else ""
+    return Plan(answer or "我暂时无法给出完整回答。", research, memory, summary)
 
 def research(plan, lookup):
     """At most two fixed-endpoint queries in parallel; no arbitrary URLs or writes."""

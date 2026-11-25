@@ -21,6 +21,7 @@ async function load() {
     state.preferred + "｜" + (models.join("、") || "无可用模型") +
     "｜Agent " + (state.agent_version || "V1") +
     (state.deepseek_mode === "test" ? "｜DeepSeek 测试剩余：" + Math.max(0, 3 - state.deepseek_test_used) + "/3" : "");
+  field("historySummary").textContent = state.history_summary || "尚未生成摘要";
   const selector = field("provider");
   selector.replaceChildren(new Option("自动", "auto"));
   for (const name of Object.keys(state.models)) selector.add(new Option(name, name));
@@ -79,7 +80,7 @@ bind("restore", async () => {
   await load();
 });
 bind("clear", async () => {
-  if (!confirm("永久清除全部对话？")) return;
+  if (!confirm("永久清除全部对话及滚动摘要？")) return;
   await api("/admin/history", "DELETE", undefined, "delete-history");
   await load();
 });

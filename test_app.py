@@ -195,5 +195,48 @@ class AssistantTests(unittest.TestCase):
             self.assertIn("无法综合", result["answer"])
             self.assertEqual(call.call_count, 1)
 
+    def test_rolling_summary_opt_in_restore_and_clear(self):
+        import json
+        from storage import database
+        with database() as db:
+            for i in range(12):
+                db.execute("INSERT INTO history(question,answer) VALUES (?,?)", ("旧项目记录"+str(i), "讨论"))
+        response = json.dumps({"answer":"继续讨论","summary":"用户正在研究旧项目。"}, ensure_ascii=False)
+        with patch("providers.complete", return_value=response) as call:
+            self.ask("继续", use_history=True)
+            self.assertEqual(call.call_count, 1)
+            self.assertIn("旧项目记录0", str(call.call_args))
+            self.assertEqual(call.call_args.kwargs["max_tokens"], 900)
+            self.assertEqual(self.client.get("/admin/state", headers=self.admin).json()["history_summary"], "用户正在研究旧项目。")
+            self.ask("新问题")
+            self.assertNotIn("用户正在研究旧项目", str(call.call_args))
+            self.assertNotIn("旧项目记录", str(call.call_args))
+            with TestClient(app) as restarted:
+                restarted.post("/ask", headers=self.voice, json={"text":"继续","use_history":True})
+                self.assertIn("用户正在研究旧项目", str(call.call_args))
+        backup = self.client.get("/admin/backup", headers=self.admin).json()
+        self.assertEqual(backup["summary_covered"], 4)
+        self.assertEqual(self.client.delete("/admin/history", headers={**self.admin,"X-Confirm":"delete-history"}).status_code, 200)
+        self.assertEqual(self.client.get("/admin/state", headers=self.admin).json()["history_summary"], "")
+        self.assertEqual(self.client.post("/admin/restore", headers={**self.admin,"X-Confirm":"restore"}, json=backup).status_code, 200)
+        self.assertEqual(self.client.get("/admin/backup", headers=self.admin).json()["summary_covered"], 4)
+        self.assertEqual(self.client.get("/admin/state", headers=self.admin).json()["history_summary"], "用户正在研究旧项目。")
+
+    def test_stale_history_cannot_resurrect_after_clear(self):
+        import continuity
+        from storage import database
+        with database() as db:
+            before = continuity.snapshot(db)
+        with database() as db:
+            continuity.clear(db)
+        with database() as db:
+            self.assertFalse(continuity.save(db, before, "旧请求", "旧回答", "旧摘要"))
+            self.assertEqual(db.execute("SELECT count(*) FROM history").fetchone()[0], 0)
+
+    def test_summary_is_not_accepted_without_old_turns(self):
+        import agent
+        self.assertEqual(agent.plan('{"answer":"好","summary":"无来源"}', "你好").summary, "")
+        self.assertEqual(agent.plan('{"answer":"好","summary":"有来源"}', "你好", allow_summary=True).summary, "有来源")
+
 if __name__ == "__main__":
     unittest.main()

@@ -1,5 +1,6 @@
 import os
 import sqlite3
+import certifi
 from contextlib import contextmanager
 
 SCHEMA = (
@@ -24,7 +25,7 @@ def database():
     url = os.getenv("DATABASE_URL")
     if url:
         from psycopg import connect
-        options = {"sslmode": "verify-full", "sslrootcert": "system", "connect_timeout": 5}
+        options = {"sslmode": "verify-full", "sslrootcert": certifi.where(), "connect_timeout": 5}
         if not os.environ.get("RENDER") and os.getenv("LOCAL_POSTGRES_TEST") == "1":
             options = {"connect_timeout": 5}
         connection = connect(url, **options)

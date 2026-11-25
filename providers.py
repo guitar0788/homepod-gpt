@@ -37,7 +37,7 @@ def complete(name, model, messages, max_tokens=420):
     if name == "openrouter":
         payload["provider"] = {"allow_fallbacks": False, "data_collection": "deny",
                                "max_price": {"prompt": 0, "completion": 0}}
-    response = httpx.post(ENDPOINTS[name], json=payload, timeout=httpx.Timeout(25.0, connect=5.0),
+    response = httpx.post(ENDPOINTS[name], json=payload, timeout=httpx.Timeout(14.0 if free_model(name, model) else 25.0, connect=4.0),
                           headers={"Authorization": "Bearer " + os.environ[name.upper() + "_KEY"]})
     if response.is_error:
         logging.getLogger(__name__).warning("Provider %s returned HTTP %s", name, response.status_code)

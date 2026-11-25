@@ -131,7 +131,7 @@ class AssistantTests(unittest.TestCase):
         with patch.dict(os.environ, {"DEEPSEEK_ENABLED": "1", "DEEPSEEK_KEY": "mock", "DEEPSEEK_MODEL": "deepseek-flash"}), patch("providers.complete", side_effect=httpx.ReadTimeout("mock")) as call:
             self.assertIn("尚未启用", self.ask("DeepSeek：你好").json()["speech"])
             call.assert_not_called()
-            self.assertEqual(self.ask("你好").status_code, 503)
+            self.assertTrue(self.ask("你好").json()["model_unavailable"])
             self.assertEqual([c.args[0] for c in call.call_args_list], ["groq", "openrouter"])
 
     def test_deepseek_test_payload(self):
@@ -237,6 +237,25 @@ class AssistantTests(unittest.TestCase):
         import agent
         self.assertEqual(agent.plan('{"answer":"好","summary":"无来源"}', "你好").summary, "")
         self.assertEqual(agent.plan('{"answer":"好","summary":"有来源"}', "你好", allow_summary=True).summary, "有来源")
+
+    def test_voice_repeat_and_new_topic_no_extra_call(self):
+        with patch("providers.complete", return_value="旧话题回答") as call:
+            self.ask("旧话题问题", use_history=True)
+            self.assertEqual(self.ask("没听清", use_history=True).json()["speech"],"旧话题回答")
+            self.assertEqual(call.call_count,1)
+            self.ask("换个话题",use_history=True)
+            self.assertIn("还没有",self.ask("再说一遍",use_history=True).json()["speech"])
+            self.ask("新话题",use_history=True)
+            self.assertNotIn("旧话题问题",str(call.call_args))
+            self.assertEqual(call.call_count,2)
+            self.assertIn("开启",self.ask("没听清").json()["speech"])
+
+    def test_voice_speech_formatting(self):
+        import home_voice
+        self.assertEqual(home_voice.render("**结论**：[资料](https://example.com)"),"结论：资料")
+        result = home_voice.render("这是完整的一句话。" * 70)
+        self.assertLess(len(result),350)
+        self.assertIn("继续问", result)
 
 if __name__ == "__main__":
     unittest.main()

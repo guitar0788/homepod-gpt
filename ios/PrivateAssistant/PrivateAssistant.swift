@@ -137,6 +137,9 @@ struct PrivateAssistantShortcuts: AppShortcutsProvider {
                     phrases: ["用 \(.applicationName) 查看今日健康报告", "查看 \(.applicationName) 的健康报告"],
                     shortTitle: "今日健康", systemImageName: "heart.text.square")
         AppShortcut(intent: HomePrivateTasksIntent(), phrases: ["用 \(.applicationName) 管理日程与提醒", "使用 \(.applicationName) 的家庭日程"], shortTitle: "日程与提醒", systemImageName: "calendar")
+        AppShortcut(intent: WelcomeSceneIntent(), phrases: ["用 \(.applicationName) 查看回家简报", "查看 \(.applicationName) 的家庭简报"], shortTitle: "回家简报", systemImageName: "house")
+        AppShortcut(intent: BedtimeSceneIntent(), phrases: ["用 \(.applicationName) 查看睡前简报"], shortTitle: "睡前简报", systemImageName: "moon")
+        AppShortcut(intent: TomorrowSceneIntent(), phrases: ["用 \(.applicationName) 安排明天"], shortTitle: "明日安排", systemImageName: "calendar.badge.clock")
     }
 }
 
@@ -158,6 +161,10 @@ struct SettingsView: View {
     @AppStorage("homeWeatherCity") private var homeWeatherCity = ""
     @AppStorage("useHistory") private var useHistory = false
     @AppStorage("shareMemory") private var shareMemory = false
+    @AppStorage("sceneCalendar") private var sceneCalendar = false
+    @AppStorage("sceneReminders") private var sceneReminders = false
+    @AppStorage("sceneHealth") private var sceneHealth = false
+    @State private var sceneStatus = ""
 
     var body: some View {
         NavigationStack {
@@ -214,6 +221,14 @@ struct SettingsView: View {
                     Button("授权系统闹钟") { Task { taskStatus = await HomeAlarm.authorize() } }
                     if !taskStatus.isEmpty { Text(taskStatus) }
                     Text("日程和提醒使用独立的本机身份验证语音入口；不上传云端。计时提醒由 iPhone 通知发出，不会保证 HomePod 响铃。").font(.footnote)
+                }
+                Section("家庭场景简报") {
+                    Toggle("简报包含日历日程", isOn: $sceneCalendar)
+                    Toggle("简报包含到期待办", isOn: $sceneReminders)
+                    Toggle("回家简报包含健康记录", isOn: $sceneHealth)
+                    Button("预览公开回家简报") { Task { sceneStatus = await HomeScenes.report(.welcome,privateAccess:false) } }
+                    if !sceneStatus.isEmpty { Text(sceneStatus) }
+                    Text("三项私人数据默认关闭，开启后仍需单项系统授权及本机身份验证。简报不会自动播放音乐、写入日历、设置闹钟或上传私人数据。").font(.footnote)
                 }
                 Section("HomePod 测试") {
                     Text("先说：嘿 Siri，测试私人助手的连接。")

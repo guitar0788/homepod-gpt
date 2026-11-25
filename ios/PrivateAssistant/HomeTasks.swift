@@ -103,6 +103,35 @@ enum HomeTasks {
         return "\(label)共有\(events.count)项日程。" + details + (events.count > 6 ? "。还有其他日程未朗读。" : "。")
     }
 
+    static func pendingReport(_ day: String) async -> String {
+        guard EKEventStore.authorizationStatus(for:.reminder) == .fullAccess else {
+            return "尚未授权提醒事项读取。"
+        }
+        let store = EKEventStore()
+        let calendar = Calendar.current
+        let offset = day == "明天" ? 1 : day == "后天" ? 2 : 0
+        guard let start = calendar.date(byAdding:.day,value:offset,to:calendar.startOfDay(for:Date())),
+              let end = calendar.date(byAdding:.day,value:1,to:start) else {
+            return "无法计算待办查询日期。"
+        }
+        let predicate = store.predicateForIncompleteReminders(withDueDateStarting:start,ending:end,calendars:nil)
+        let reminders: [EKReminder]? = await withCheckedContinuation { continuation in
+            store.fetchReminders(matching:predicate) { result in
+                continuation.resume(returning:result)
+            }
+        }
+        guard let reminders else { return "暂时无法读取待办事项。" }
+        let items = reminders.filter { item in
+            guard let due = item.dueDateComponents?.date ?? item.dueDateComponents.flatMap({ calendar.date(from:$0) }) else { return false }
+            return due >= start && due < end && !item.isCompleted
+        }.sorted {
+            ($0.dueDateComponents?.date ?? end) < ($1.dueDateComponents?.date ?? end)
+        }
+        guard !items.isEmpty else { return "\(day)没有读取到到期的未完成提醒。" }
+        let titles = items.prefix(3).map { String(($0.title ?? "未命名").prefix(60)) }
+        return "\(day)有\(items.count)项到期的未完成提醒：" + titles.joined(separator:"、") + (items.count > 3 ? "，还有其他待办未朗读。" : "。")
+    }
+
     static func createReminder(_ text: String) -> String {
         guard EKEventStore.authorizationStatus(for:.reminder) == .fullAccess else { return "请在助手 App 中授权提醒事项。" }
         let n = "[0-9零一二两三四五六七八九十]{1,4}"

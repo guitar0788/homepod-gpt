@@ -25,6 +25,12 @@ jobs:
           xcodebuild -version
           xcrun --sdk iphoneos --show-sdk-version
           command -v xcodegen || brew install xcodegen
+      - name: Test scene routing
+        run: |
+          temp="$(mktemp -d)"
+          cp ios/tests/SceneRulesTests.swift "$temp/main.swift"
+          swiftc ios/PrivateAssistant/SceneRules.swift "$temp/main.swift" -o "$temp/test-scenes"
+          "$temp/test-scenes"
       - name: Build unsigned iPhone IPA
         run: bash ios/build-unsigned.sh
       - name: Upload unsigned artifact

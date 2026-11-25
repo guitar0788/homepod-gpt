@@ -11,6 +11,7 @@ enum NativeHome {
             formatter.dateFormat = text.hasPrefix("今天") ? "yyyy年M月d日 EEEE" : "HH点mm分"
             return formatter.string(from: Date())
         }
+        if let scene = HomeSceneKind.parse(text) { return await HomeScenes.report(scene,privateAccess:false) }
         if let result = await HomeWeather.reply(text) { return result }
         if let result = await HomeMusic.reply(text) { return result }
         if let result = await HomeAlarm.reply(text) { return result }

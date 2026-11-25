@@ -208,6 +208,7 @@ struct SettingsView: View {
                     Text("仅读取步数、步行和跑步距离、活动能量、睡眠和心率记录。不会写入健康数据、上传云端或保存报告。语音报告需要本机身份验证，请留意旁人能听见。").font(.footnote)
                 }
                 Section("家庭服务") {
+                    Text(SmartHome.available ? "本机 Apple Intelligence 智能调度可用" : "本机 AI 暂不可用，保留原有服务和云端问答").font(.footnote)
                     TextField("默认天气城市（例如北京）", text: $homeWeatherCity)
                     Button("授权 Apple Music") { Task { musicStatus = await HomeMusic.authorize() } }
                     if !musicStatus.isEmpty { Text(musicStatus) }

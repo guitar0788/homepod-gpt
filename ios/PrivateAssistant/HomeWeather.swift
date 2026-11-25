@@ -63,6 +63,8 @@ enum HomeWeather {
     }
 
     static func parse(_ text: String) -> Intent? {
+        // Do not treat an entire compound sentence or negation as a city name.
+        guard !ReadRouting.compound(text), !["不要","不用","别查","不查","以及","顺便","还有","然后"].contains(where:{ text.contains($0) }) else { return nil }
         let pattern = #"^(?:请问|告诉我|帮我查一下|查一下|查查|查看)?\s*(今天|明天|后天|现在|当前|今日)?(.*?)(今天|明天|后天|现在|当前|今日)?(?:的)?(天气(?:预报|怎么样|如何)?|气温(?:多少|怎么样)?|多少度|会下雨吗|下雨吗|冷不冷|热不热|适合(?:出去玩|出门|散步|跑步|运动)吗|要带伞吗|需要带伞吗|要穿什么|怎么穿衣服|穿什么衣服(?:合适)?)$"#
         guard let regex = try? NSRegularExpression(pattern: pattern),
               let match = regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)) else { return nil }

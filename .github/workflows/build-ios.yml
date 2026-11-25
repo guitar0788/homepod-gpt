@@ -31,6 +31,12 @@ jobs:
           cp ios/tests/SceneRulesTests.swift "$temp/main.swift"
           swiftc ios/PrivateAssistant/SceneRules.swift "$temp/main.swift" -o "$temp/test-scenes"
           "$temp/test-scenes"
+      - name: Test read-only AI routing boundaries
+        run: |
+          temp="$(mktemp -d)"
+          cp ios/tests/ReadRoutingTests.swift "$temp/main.swift"
+          swiftc ios/PrivateAssistant/ReadRouting.swift "$temp/main.swift" -o "$temp/test-routing"
+          "$temp/test-routing"
       - name: Build unsigned iPhone IPA
         run: bash ios/build-unsigned.sh
       - name: Upload unsigned artifact

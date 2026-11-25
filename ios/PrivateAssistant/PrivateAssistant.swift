@@ -162,6 +162,7 @@ struct PrivateAssistantShortcuts: AppShortcutsProvider {
                     phrases: ["用 \(.applicationName) 查看今日健康报告", "查看 \(.applicationName) 的健康报告"],
                     shortTitle: "今日健康", systemImageName: "heart.text.square")
         AppShortcut(intent: ExtendedHealthIntent(), phrases: ["用 \(.applicationName) 查看详细健康报告"], shortTitle: "详细健康", systemImageName: "heart.text.square")
+        AppShortcut(intent: AppleLibraryIntent(), phrases: ["用 \(.applicationName) 查询苹果资料"], shortTitle: "苹果资料", systemImageName: "person.crop.rectangle")
         AppShortcut(intent: HomePrivateTasksIntent(), phrases: ["用 \(.applicationName) 管理日程与提醒", "使用 \(.applicationName) 的家庭日程"], shortTitle: "日程与提醒", systemImageName: "calendar")
         AppShortcut(intent: WelcomeSceneIntent(), phrases: ["用 \(.applicationName) 查看回家简报", "查看 \(.applicationName) 的家庭简报"], shortTitle: "回家简报", systemImageName: "house")
         AppShortcut(intent: BedtimeSceneIntent(), phrases: ["用 \(.applicationName) 查看睡前简报"], shortTitle: "睡前简报", systemImageName: "moon")
@@ -197,6 +198,10 @@ struct SettingsView: View {
     @State private var extendedHealthStatus = ""
     @State private var filePicker = false
     @State private var fileStatus = ""
+    @State private var contactName = ""
+    @State private var contactStatus = ""
+    @State private var photoPeriod = "今天"
+    @State private var photoStatus = ""
 
     var body: some View {
         NavigationStack {
@@ -205,7 +210,7 @@ struct SettingsView: View {
                     VStack(alignment: .leading, spacing: 8) {
                         Label("家庭 AI 助手", systemImage: "house.and.flag")
                             .font(.title2.bold())
-                        Text("Siri Plus 1.0.1 · 家庭语音增强").font(.subheadline).foregroundStyle(.secondary)
+                        Text("Siri Plus 1.0.2 · 家庭语音增强").font(.subheadline).foregroundStyle(.secondary)
                         Text("语音入口：询问私人助手").font(.callout)
                         Label(configured ? "语音令牌已保存" : "需要首次配置语音令牌", systemImage: configured ? "checkmark.shield" : "key")
                         Label(SmartHome.available ? "本机智能调度可用" : "使用基础调度与云端问答", systemImage: "cpu")
@@ -268,6 +273,22 @@ struct SettingsView: View {
                     Button("选择要授权读取的文件") { filePicker = true }
                     if !fileStatus.isEmpty { Text(fileStatus) }
                     Text("通过系统文件选择器读取你明确选中的文本文件，可从 iCloud Drive 选择。不会读取整个 iCloud 账户，不保存授权、不上传文件。").font(.footnote)
+                }
+                Section("苹果通讯录") {
+                    Button("授权通讯录") { Task { contactStatus = await AppleLibrary.authorizeContacts() } }
+                    TextField("联系人姓名", text: $contactName)
+                    Button("本机查找联系人") { let name = contactName; Task { contactStatus = await AppleLibrary.contacts(name,details:true) } }
+                    if !contactStatus.isEmpty { Text(contactStatus) }
+                    Text("仅本机显示电话号码和邮箱；语音查询仅朗读姓名及联系方式数量。支持系统有限授权。").font(.footnote)
+                }
+                Section("苹果照片") {
+                    Button("授权照片资料库") { Task { photoStatus = await AppleLibrary.authorizePhotos() } }
+                    Picker("统计范围",selection:$photoPeriod) {
+                        ForEach(["今天","昨天","最近七天","全部"],id:\.self) { Text($0).tag($0) }
+                    }
+                    Button("读取照片统计") { let period = photoPeriod; Task { photoStatus = await AppleLibrary.photoReport(period) } }
+                    if !photoStatus.isEmpty { Text(photoStatus) }
+                    Text("支持系统有限照片权限，只统计可访问照片与视频，不读取图像内容、不修改照片或上传云端。").font(.footnote)
                 }
                 Section("家庭服务") {
                     Text(SmartHome.available ? "本机 Apple Intelligence 智能调度可用" : "本机 AI 暂不可用，保留原有服务和云端问答").font(.footnote)

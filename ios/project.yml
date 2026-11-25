@@ -13,6 +13,8 @@ targets:
       path: GeneratedInfo.plist
       properties:
         NSAlarmKitUsageDescription: 用于您主动要求设置的家庭助手手机闹钟。
+        NSContactsUsageDescription: 用于您主动查找授权范围内的联系人，本机读取，不上传云端。
+        NSPhotoLibraryUsageDescription: 用于您主动统计授权范围内的照片和视频，本机只读，不上传云端。
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.homepodgpt.privateassistant
@@ -29,5 +31,5 @@ targets:
         INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription: 用于您主动要求查看的本机日历日程，不上传云端。
         INFOPLIST_KEY_NSRemindersFullAccessUsageDescription: 用于您主动要求创建的本机提醒事项，不上传云端。
         INFOPLIST_KEY_NSAlarmKitUsageDescription: 用于您主动要求设置的家庭助手手机闹钟。
-        MARKETING_VERSION: "1.0.1"
-        CURRENT_PROJECT_VERSION: "11"
+        MARKETING_VERSION: "1.0.2"
+        CURRENT_PROJECT_VERSION: "12"

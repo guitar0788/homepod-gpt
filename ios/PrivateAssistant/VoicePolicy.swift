@@ -12,6 +12,9 @@ enum VoicePolicy {
             // The separately authenticated entry is always required for personal records.
             return "请使用私人助手的家庭日程与提醒功能，进行本机身份验证。"
         }
+        if ["通讯录","查联系人","联系人电话","我的照片","照片数量","今天拍了多少","我的相册","iCloud Drive","我的iCloud文件"].contains(where:{text.contains($0)}) {
+            return "请使用私人助手的苹果资料查询功能，或在 App 中选择文件和授权资料，不会自动上传云端。"
+        }
         let healthTerms = ["我的血氧","我的体重","我的体脂","我的BMI","我的呼吸频率","我的运动记录","我的饮水记录","详细健康报告","我的健康","我的心率","我的静息心率","我的睡眠","我的步数","健康报告","健康记录","健康数据","我今天走","今天走了多少步","我今天消耗","我昨晚睡","昨晚睡了多久","今天心率","昨晚的睡眠","今天睡了多久"]
         if healthTerms.contains(where:{text.contains($0)}) {
             return "请使用私人助手的今日健康报告功能，进行本机身份验证。"

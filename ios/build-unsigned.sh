@@ -14,7 +14,7 @@ test -f "$app/Info.plist"
 test -f "$app/PrivateAssistant"
 # Xcode generated plists can omit unknown or new INFOPLIST_KEY settings.
 # The explicit source plist must survive the final build; fail rather than ship a broken permission.
-for key in NSAlarmKitUsageDescription NSHealthShareUsageDescription NSAppleMusicUsageDescription NSCalendarsFullAccessUsageDescription NSRemindersFullAccessUsageDescription; do
+for key in NSAlarmKitUsageDescription NSHealthShareUsageDescription NSAppleMusicUsageDescription NSCalendarsFullAccessUsageDescription NSRemindersFullAccessUsageDescription NSContactsUsageDescription NSPhotoLibraryUsageDescription; do
   value="$(/usr/libexec/PlistBuddy -c "Print :$key" "$app/Info.plist")"
   test -n "$value"
   echo "Verified permission declaration: $key"
